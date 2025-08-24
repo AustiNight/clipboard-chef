@@ -1,6 +1,6 @@
 Chef Tools License Agreement
 
-Copyright © [2025] [Your Name or Company]. All rights reserved.
+Copyright © [2025] Jonathan H. Aulson. All rights reserved.
 
 This software and associated documentation files (the “Software”) are the intellectual property of the copyright holder. By obtaining a copy of the Software, you agree to the following terms:
 
