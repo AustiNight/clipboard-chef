@@ -1,0 +1,28 @@
+Chef Tools License Agreement
+
+Copyright © [2025] [Your Name or Company]. All rights reserved.
+
+This software and associated documentation files (the “Software”) are the intellectual property of the copyright holder. By obtaining a copy of the Software, you agree to the following terms:
+
+License Grant
+You are granted a limited, non-transferable, non-exclusive license to use the Software solely for personal or internal business purposes.
+
+Restrictions
+
+You may not copy, modify, merge, publish, distribute, sublicense, sell, or otherwise transfer the Software or any derivative works.
+
+You may not reverse engineer, decompile, or disassemble the Software.
+
+You may not use the Software for any commercial purpose without a separate written agreement.
+
+Ownership
+All rights, title, and interest in the Software remain the exclusive property of the copyright holder. No rights are granted to you other than those explicitly set forth in this Agreement.
+
+Termination
+Any breach of these terms will automatically terminate your license to use the Software.
+
+Disclaimer of Warranty
+The Software is provided “AS IS”, without warranty of any kind, express or implied, including but not limited to the warranties of merchantability or fitness for a particular purpose.
+
+Limitation of Liability
+In no event shall the copyright holder be liable for any damages arising out of the use of or inability to use the Software.
