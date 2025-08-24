@@ -31,6 +31,28 @@ const LS_KEYS = {
 
 const WEEKDAYS = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
 
+// Predefined list of yield units for recipe batch sizes.  These units are used in the
+// recipe editor to provide a sensible drop‑down instead of free‑text entry.  The first
+// entry is intentionally blank so that users can clear the field if desired.
+const RECIPE_YIELD_UNITS = [
+  '',
+  'unit',
+  'quart',
+  'pint',
+  'gallon',
+  'liter',
+  'cup',
+  'bottle',
+  'pan',
+  'half pan',
+  'third pan',
+  'sixth pan',
+  'ninth pan',
+  'ml',
+  'g',
+  'kg'
+];
+
 function load(key, fallback) {
   try { return JSON.parse(localStorage.getItem(key)) ?? fallback; }
   catch { return fallback; }
@@ -128,7 +150,14 @@ function routeTo(view) {
     case 'items': renderItems(root); break;
     case 'recipes': renderRecipes(root); break;
     case 'par': renderPar(root); break;
-    case 'modifiers': renderModifiers(root); break;
+    case 'modifiers':
+      // Per‑shift modifiers page has been deprecated.  Instead of allowing
+      // separate modifier settings, we direct users to the generate view where
+      // they can manually adjust suggested prep quantities.  Show a notice
+      // informing them of this change.
+      alert('Per‑shift modifiers have been removed. Please adjust prep quantities in the Generate view.');
+      renderGenerate(root);
+      break;
     case 'export': renderExport(root); break;
     case 'upload': renderUpload(root); break;
     case 'generate': renderGenerate(root); break;
@@ -321,23 +350,30 @@ function renderPar(root) {
     template.lines.forEach((line, idx) => {
       const item = state.items.find(i=>i.id===line.itemId);
       const tr = document.createElement('tr');
+      // Filter items for this location; include items that either have no location restrictions or include the context location
+      const available = state.items.filter(i => !i.locations || i.locations.length === 0 || i.locations.includes(ctx.location));
       tr.innerHTML = `
         <td>${item?.station || ''}</td>
         <td>
           <select data-k="itemId">
-            ${state.items.map(i=>`<option value="${i.id}" ${line.itemId===i.id?'selected':''}>${i.id}</option>`).join('')}
+            ${
+              available.map(i=>`<option value="${i.id}" ${line.itemId===i.id?'selected':''}>${i.name || i.id}</option>`).join('')
+            }
           </select>
         </td>
-        <td>${item?.name || ''}</td>
         <td>${item?.unit || ''}</td>
         <td><input type="number" min="0" data-k="parAmount" value="${line.parAmount??0}"></td>
         <td><button data-act="del" class="secondary">Remove</button></td>
       `;
       tr.oninput = (e)=>{
         const el=e.target, k=el.dataset.k; if(!k) return;
-        if (k==='parAmount') line[k] = Number(el.value)||0;
-        if (k==='itemId') line[k] = el.value;
-        persistAll(); draw();
+        if (k==='parAmount') {
+          line[k] = Number(el.value)||0;
+        } else if (k==='itemId') {
+          line[k] = el.value;
+        }
+        persistAll();
+        draw();
       };
       tr.querySelector('button[data-act="del"]').onclick=()=>{ template.lines.splice(idx,1); persistAll(); draw(); };
       tbody.appendChild(tr);
@@ -345,7 +381,10 @@ function renderPar(root) {
   }
   draw();
   tpl.querySelector('#add-par-line').onclick = ()=>{
-    const first = state.items[0]; if (!first) return alert('Add items first.');
+    // Choose the first available item for this location as the default new line
+    const available = state.items.filter(i => !i.locations || i.locations.length === 0 || i.locations.includes(ctx.location));
+    const first = available[0];
+    if (!first) return alert('Add items first.');
     template.lines.push({ itemId: first.id, parAmount: 0 });
     persistAll(); draw();
   };
@@ -395,13 +434,11 @@ function generateWorksheetRows(date, location, shift) {
   const rows = [];
   const template = getParTemplate(location, shift);
   if (!template) return rows;
-  const mod = ensureModifiers(location, shift);
-  const weekday = todayWeekdayIndex(date);
-  const pct = mod.byWeekday[weekday] || 0;
   template.lines.forEach(line => {
     const item = state.items.find(i => i.id === line.itemId);
     if (!item) return;
-    const adjPar = Math.round(line.parAmount * (1 + pct / 100));
+    // Use the par amount directly without applying any modifiers.  Modifiers are deprecated.
+    const parAmount = line.parAmount;
     rows.push({
       date,
       location,
@@ -410,7 +447,7 @@ function generateWorksheetRows(date, location, shift) {
       item_id: line.itemId,
       item_name: item.name || '',
       unit: item.unit || '',
-      par: adjPar,
+      par: parAmount,
       on_hand: ''
     });
   });
@@ -419,10 +456,20 @@ function generateWorksheetRows(date, location, shift) {
 
 /* Create CSV from worksheet rows */
 function worksheetRowsToCSV(rows) {
-  const header = ['date','location','shift','station','item_id','item_name','unit','par','on_hand'];
+  // Output a simplified header without date/location/shift or item ID.  The context is captured
+  // in the filename, and the item name uniquely identifies the line for most kitchens.  If
+  // duplicate names exist across stations, they can still be matched by station.
+  const header = ['station','item_name','unit','par','on_hand'];
   const lines = [header.map(csvEscape).join(',')];
   rows.forEach(r => {
-    lines.push(header.map(col => csvEscape(r[col] ?? '')).join(','));
+    const obj = {
+      station: r.station,
+      item_name: r.item_name,
+      unit: r.unit,
+      par: r.par,
+      on_hand: r.on_hand
+    };
+    lines.push(header.map(col => csvEscape(obj[col] ?? '')).join(','));
   });
   return lines.join('\n');
 }
@@ -432,13 +479,13 @@ function worksheetRowsToHTMLTable(rows) {
   const table = document.createElement('table');
   table.className = 'table';
   const thead = document.createElement('thead');
-  thead.innerHTML = '<tr><th>Date</th><th>Location</th><th>Shift</th><th>Station</th><th>Item</th><th>Unit</th><th>Par</th><th>On‑Hand</th></tr>';
+  // Simplified header without date, location or shift columns.  These values are implicit in the context.
+  thead.innerHTML = '<tr><th>Station</th><th>Item</th><th>Unit</th><th>Par</th><th>On‑Hand</th></tr>';
   table.appendChild(thead);
   const tbody = document.createElement('tbody');
   rows.forEach(r => {
     const tr = document.createElement('tr');
     tr.innerHTML = `
-      <td>${r.date}</td><td>${r.location}</td><td>${r.shift}</td>
       <td>${r.station}</td><td>${r.item_name}</td><td>${r.unit}</td>
       <td>${r.par}</td><td>${r.on_hand}</td>
     `;
@@ -453,22 +500,68 @@ function worksheetRowsToHTMLTable(rows) {
 function renderExport(root) {
   const tpl = $('#tmpl-export').content.cloneNode(true);
   const ctx = state.context;
-  function updatePreview() {
-    const rows = generateWorksheetRows(ctx.date, ctx.location, ctx.shift);
-    const preview = worksheetRowsToHTMLTable(rows);
+  // Generate worksheet rows once and bind them to the table so edits persist until saved or exported
+  let rows = generateWorksheetRows(ctx.date, ctx.location, ctx.shift);
+  // Build an interactive table where on‑hand amounts can be filled in directly
+  function drawInteractiveTable() {
     const container = tpl.querySelector('#worksheet-preview');
     container.innerHTML = '';
-    container.appendChild(preview);
+    const table = document.createElement('table');
+    table.className = 'table';
+    const thead = document.createElement('thead');
+    thead.innerHTML = '<tr><th>Station</th><th>Item</th><th>Unit</th><th>Par</th><th>On‑Hand</th></tr>';
+    table.appendChild(thead);
+    const tbody = document.createElement('tbody');
+    rows.forEach((r, idx) => {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td>${r.station}</td>
+        <td>${r.item_name}</td>
+        <td>${r.unit}</td>
+        <td>${r.par}</td>
+        <td><input type="number" min="0" data-idx="${idx}" value="${r.on_hand || ''}"></td>
+      `;
+      const inp = tr.querySelector('input');
+      inp.oninput = (e) => {
+        const i = Number(e.target.dataset.idx);
+        rows[i].on_hand = Number(e.target.value) || 0;
+      };
+      tbody.appendChild(tr);
+    });
+    table.appendChild(tbody);
+    container.appendChild(table);
   }
-  updatePreview();
+  drawInteractiveTable();
+
+  // Export the current rows to CSV (without context columns).  The filename still includes the context for clarity.
   tpl.querySelector('#export-onhand-csv').onclick = ()=>{
-    const rows = generateWorksheetRows(ctx.date, ctx.location, ctx.shift);
     const csv = worksheetRowsToCSV(rows);
     const fname = `onhand_${ctx.date}_${ctx.location.replace(/\s+/g,'_')}_${ctx.shift.replace(/\s+/g,'_')}.csv`;
     downloadFile(fname, 'text/csv', csv);
   };
-  tpl.querySelector('#print-worksheet').onclick = ()=>{
-    window.print();
+  // Repurpose the print button as a save action for on‑hand snapshots
+  const saveBtn = tpl.querySelector('#print-worksheet');
+  saveBtn.textContent = 'Save On‑Hand (ctx)';
+  saveBtn.onclick = ()=>{
+    // Build a snapshot using the current rows and context
+    const snap = {
+      date: ctx.date,
+      location: ctx.location,
+      shift: ctx.shift,
+      rows: rows.map(r => ({
+        itemId: r.item_id,
+        par: r.par,
+        unit: r.unit,
+        onHand: Number(r.on_hand) || 0
+      })),
+      source: 'manual',
+      ocrConfidence: 1.0
+    };
+    // Remove any existing snapshot for this context then save
+    state.onhandLog = state.onhandLog.filter(s => !(s.date===snap.date && s.location===snap.location && s.shift===snap.shift));
+    state.onhandLog.push(snap);
+    persistAll();
+    alert('On‑Hand data saved.');
   };
   root.appendChild(tpl);
 }
@@ -500,25 +593,60 @@ function parseCSVLine(line) {
 
 function parseWorksheetCSV(text) {
   const lines = text.trim().split(/\r?\n/);
-  if (lines.length < 2) return null;
-  const header = parseCSVLine(lines[0]).map(h => h.trim());
-  const rows = [];
+  if (!lines.length) return null;
+  // Parse header and normalize to lower case for easier matching
+  const header = parseCSVLine(lines[0]).map(h => h.trim().toLowerCase());
+  const rowsOut = [];
+  let date = null, location = null, shift = null;
+  // Determine indices of relevant columns; fall back gracefully
+  const idxStation  = header.indexOf('station');
+  const idxItemName= header.indexOf('item_name') !== -1 ? header.indexOf('item_name') : header.indexOf('item');
+  const idxUnit     = header.indexOf('unit');
+  const idxPar      = header.indexOf('par');
+  const idxOnHand   = header.indexOf('on_hand') !== -1 ? header.indexOf('on_hand') : header.indexOf('on-hand');
+  const idxItemId   = header.indexOf('item_id');
+  const idxDate     = header.indexOf('date');
+  const idxLocation = header.indexOf('location');
+  const idxShift    = header.indexOf('shift');
   for (let i = 1; i < lines.length; i++) {
     if (!lines[i].trim()) continue;
     const cells = parseCSVLine(lines[i]);
-    const obj = {};
-    header.forEach((col, j) => { obj[col] = cells[j] ?? ''; });
-    rows.push(obj);
+    // Capture date/location/shift if provided
+    if (idxDate !== -1) date = date ?? cells[idxDate];
+    if (idxLocation !== -1) location = location ?? cells[idxLocation];
+    if (idxShift !== -1) shift = shift ?? cells[idxShift];
+    let itemId = '';
+    let par = 0;
+    let unit = '';
+    let onHand = 0;
+    if (idxItemId !== -1) {
+      itemId = cells[idxItemId] || '';
+    }
+    if (idxPar !== -1) par = Number(cells[idxPar]) || 0;
+    if (idxUnit !== -1) unit = cells[idxUnit] || '';
+    if (idxOnHand !== -1) onHand = Number(cells[idxOnHand]) || 0;
+    // If itemId is not present, attempt to match by item name
+    if (!itemId && idxItemName !== -1) {
+      const name = cells[idxItemName];
+      const match = state.items.find(it => it.name === name);
+      if (match) {
+        itemId = match.id;
+      }
+    }
+    if (itemId) {
+      rowsOut.push({
+        itemId,
+        par,
+        unit,
+        onHand
+      });
+    }
   }
-  if (!rows.length) return null;
-  const {date, location, shift} = rows[0];
-  const parsedRows = rows.map(r => ({
-    itemId: r.item_id,
-    par: Number(r.par) || 0,
-    unit: r.unit,
-    onHand: Number(r.on_hand) || 0
-  }));
-  return { date, location, shift, rows: parsedRows };
+  // Use current context values if date/location/shift are not present
+  if (!date) date = state.context.date;
+  if (!location) location = state.context.location;
+  if (!shift) shift = state.context.shift;
+  return { date, location, shift, rows: rowsOut };
 }
 
 /* --------------------------------------------------------------------- */
@@ -544,16 +672,18 @@ function renderUpload(root) {
     persistAll();
     csvStatus.textContent = `Uploaded ${f.name} → ${snap.rows.length} lines`;
     reviewDiv.innerHTML = '';
-    // Show a review table for quick look
+    // Show a review table for quick look.  Use human‑readable item names when available.
     const table = document.createElement('table');
     table.className = 'table';
     const thead = document.createElement('thead');
-    thead.innerHTML = '<tr><th>Item ID</th><th>Par</th><th>On‑Hand</th></tr>';
+    thead.innerHTML = '<tr><th>Item</th><th>Par</th><th>On‑Hand</th></tr>';
     table.appendChild(thead);
     const tbody = document.createElement('tbody');
     snap.rows.forEach(r => {
       const tr = document.createElement('tr');
-      tr.innerHTML = `<td>${r.itemId}</td><td>${r.par}</td><td>${r.onHand}</td>`;
+      const it = state.items.find(itm => itm.id === r.itemId);
+      const itemName = it ? it.name || it.id : r.itemId;
+      tr.innerHTML = `<td>${itemName}</td><td>${r.par}</td><td>${r.onHand}</td>`;
       tbody.appendChild(tr);
     });
     table.appendChild(tbody);
@@ -626,41 +756,47 @@ function calculatePrepRows(date, location, shift) {
   const template = getParTemplate(location, shift);
   const rows = [];
   if (!template) return rows;
-  const mod = ensureModifiers(location, shift);
-  const weekday = todayWeekdayIndex(date);
-  const pct = mod.byWeekday[weekday] || 0;
   template.lines.forEach(line => {
     const item = state.items.find(i => i.id === line.itemId);
     if (!item) return;
-    const parBase = line.parAmount;
-    const adjPar = Math.round(parBase * (1 + pct / 100));
+    // Base par amount (no modifiers applied)
+    const par = line.parAmount;
+    // Determine on-hand quantity from snapshot if available
     const onHandRow = onhandSnap ? onhandSnap.rows.find(r => r.itemId === line.itemId) : null;
     const onHand = onHandRow ? onHandRow.onHand : 0;
-    const needed = Math.max(0, adjPar - onHand);
+    const needed = Math.max(0, par - onHand);
     let suggested = 0;
     let batchYield = null;
     if (item.type === 'recipe') {
+      // Use default batch yield for recipe items; fallback to 0 if undefined
       batchYield = item.default_batch_yield || 0;
       if (needed > 0) {
         const batches = batchYield > 0 ? Math.ceil(needed / batchYield) : 0;
         suggested = batches * batchYield;
       }
     } else {
-      suggested = needed;
+      // For mechanical items, use the unitCount as the batch yield.  A unitCount of N
+      // means that one prep batch produces N units of the item.  If unitCount is not set,
+      // default to 1 so suggested equals needed.
+      const unitCount = item.unitCount || 1;
+      batchYield = unitCount;
+      if (needed > 0) {
+        const batches = unitCount > 0 ? Math.ceil(needed / unitCount) : 0;
+        suggested = batches * unitCount;
+      }
     }
     rows.push({
       station: item.station || '',
       itemId: item.id,
       itemName: item.name || '',
       unit: item.unit || '',
-      par: parBase,
-      modifier: pct,
-      adjPar: adjPar,
+      par: par,
       onHand: onHand,
       needed: needed,
       batchYield: batchYield,
       suggested: suggested,
-      assignedTo: '',
+      // Default assignment to the item's station; can be edited later
+      assignedTo: item.station || '',
       notes: item.notes || ''
     });
   });
@@ -669,7 +805,9 @@ function calculatePrepRows(date, location, shift) {
 
 /* Convert prep rows to CSV */
 function prepRowsToCSV(prepRows, ctx) {
-  const header = ['date','location','shift','station','item_id','item_name','unit','par','modifier','adj_par','on_hand','needed','batch_yield','suggested_prep','assigned_to','notes'];
+  // Export prep rows without modifier or adj_par columns.  The values of par and needed
+  // reflect the actual required amount for the context.
+  const header = ['date','location','shift','station','item_id','item_name','unit','par','on_hand','needed','batch_yield','suggested_prep','assigned_to','notes'];
   const lines = [header.map(csvEscape).join(',')];
   prepRows.forEach(r => {
     const obj = {
@@ -681,8 +819,6 @@ function prepRowsToCSV(prepRows, ctx) {
       item_name: r.itemName,
       unit: r.unit,
       par: r.par,
-      modifier: r.modifier,
-      adj_par: r.adjPar,
       on_hand: r.onHand,
       needed: r.needed,
       batch_yield: r.batchYield,
@@ -711,18 +847,22 @@ function renderGenerate(root) {
         <td>${r.itemName}</td>
         <td>${r.unit}</td>
         <td>${r.par}</td>
-        <td>${r.modifier}</td>
-        <td>${r.adjPar}</td>
         <td>${r.onHand}</td>
         <td>${r.needed}</td>
         <td>${r.batchYield ?? ''}</td>
-        <td>${r.suggested}</td>
+        <td><input type="number" min="0" data-k="suggested" value="${r.suggested}"></td>
         <td><input data-k="assignedTo" value="${r.assignedTo}"></td>
         <td><input data-k="notes" value="${r.notes}"></td>
       `;
       tr.oninput = (e) => {
-        const el = e.target; const k = el.dataset.k; if (!k) return;
-        currentRows[idx][k] = el.value;
+        const el = e.target;
+        const k = el.dataset.k;
+        if (!k) return;
+        if (k === 'suggested') {
+          currentRows[idx][k] = Number(el.value) || 0;
+        } else {
+          currentRows[idx][k] = el.value;
+        }
       };
       tbody.appendChild(tr);
     });
