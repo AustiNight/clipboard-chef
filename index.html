@@ -258,10 +258,12 @@
           <table class="table">
             <thead>
               <tr>
-                <th>Item ID</th>
+                <!-- Remove Item ID column from the UI.  We store IDs internally on each item but
+                     show only editable fields relevant to chefs. -->
                 <th>Name</th>
                 <th>Type</th>
                 <th>Unit</th>
+                <th>Unit Count</th>
                 <th>Station</th>
                 <th>Locations</th>
                 <th>Default Batch Yield</th>
@@ -287,7 +289,8 @@
           <table class="table">
             <thead>
               <tr>
-                <th>Item ID</th>
+                <!-- Use human-readable item names instead of internal IDs -->
+                <th>Item</th>
                 <th>Yield Amount</th>
                 <th>Yield Unit</th>
                 <th>Ingredients (amount unit name)</th>
@@ -316,8 +319,9 @@
             <thead>
               <tr>
                 <th>Station</th>
-                <th>Item ID</th>
-                <th>Item Name</th>
+                <!-- Collapse the old Item ID/Item Name columns into a single Item column that shows the
+                     human‑readable name while storing the ID under the hood -->
+                <th>Item</th>
                 <th>Unit</th>
                 <th>Par Amount</th>
                 <th></th>
@@ -358,7 +362,7 @@
             <button id="export-onhand-csv" class="primary">Download CSV (ctx)</button>
             <button id="print-worksheet" class="secondary">Print Worksheet (ctx)</button>
           </div>
-          <div class="note">Columns: date, location, shift, station, item_id, item_name, unit, par, on_hand</div>
+          <div class="note">Columns: station, item, unit, par, on_hand</div>
           <div id="worksheet-preview"></div>
         </div>
       </template>
@@ -402,8 +406,6 @@
                 <th>Item</th>
                 <th>Unit</th>
                 <th>Par</th>
-                <th>Modifier %</th>
-                <th>Adj. Par</th>
                 <th>On‑Hand</th>
                 <th>Needed</th>
                 <th>Batch Yield</th>
