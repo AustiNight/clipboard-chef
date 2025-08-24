@@ -1,0 +1,458 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Chef Tools — Menu Planner, Converter & Prep/Par</title>
+  <link rel="stylesheet" href="style.css"/>
+  <link rel="manifest" href="manifest.json"/>
+  <meta name="description" content="Unified static app with Menu Planner, Ingredient Converter and Prep/Par list management, switchable via tabs."/>
+</head>
+<body>
+  <header class="app-header">
+    <div class="brand">
+      <h1>Chef Tools</h1>
+      <p>Menu Planner, Ingredient Converter & Prep/Par Manager</p>
+    </div>
+
+    <!-- Tabs -->
+    <nav class="tabbar" role="tablist" aria-label="Chef Tools tabs">
+      <button id="tabbtn-menu" class="tab active" data-tab="menu"
+              role="tab" aria-selected="true" aria-controls="tab-menu">
+        Menu Planner
+      </button>
+      <button id="tabbtn-converter" class="tab" data-tab="converter"
+              role="tab" aria-selected="false" aria-controls="tab-converter">
+        Ingredient Converter
+      </button>
+      <button id="tabbtn-preppar" class="tab" data-tab="preppar"
+              role="tab" aria-selected="false" aria-controls="tab-preppar">
+        Prep &amp; Par List
+      </button>
+    </nav>
+  </header>
+
+  <main class="app-main">
+
+    <!-- MENU PLANNER TAB -->
+    <section id="tab-menu" class="tab-content active" role="tabpanel" aria-labelledby="tabbtn-menu">
+      <h2>Menu Planner</h2>
+      <p class="intro">
+        Build a menu, assign ingredients with per-dish amounts and units, set your expected diners,
+        then generate a shopping list with pricing. Your ingredient catalog & recipes are saved locally.
+      </p>
+
+      <!-- Menu Section -->
+      <section id="menu-section">
+        <h3>Menu</h3>
+        <p>Enter the dishes for your event. Each dish has a name and optional description.</p>
+        <table id="menu-table">
+          <thead>
+            <tr>
+              <th>Dish Name</th>
+              <th>Description</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            <!-- rows injected -->
+          </tbody>
+        </table>
+        <button id="add-dish-btn" class="add-btn">Add Dish</button>
+      </section>
+
+      <!-- Ingredients Section -->
+      <section id="ingredients-section">
+        <h3>Ingredients</h3>
+        <p>Assign ingredients to each dish along with the amount needed per dish and its unit.</p>
+        <table id="ingredients-table">
+          <thead>
+            <tr>
+              <th>Dish</th>
+              <th>Ingredient</th>
+              <th>Amount</th>
+              <th>Unit</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            <!-- rows injected -->
+          </tbody>
+        </table>
+        <button id="add-ingredient-btn" class="add-btn">Add Ingredient</button>
+      </section>
+
+      <!-- Expected Seats Section -->
+      <section id="seats-section">
+        <h3>Expected Seats (Number of Diners)</h3>
+        <input type="number" id="expected-seats" min="1" value="1" />
+      </section>
+
+      <!-- Generate Shopping List Button -->
+      <section id="generate-section">
+        <button id="generate-btn" class="primary-btn">Generate Shopping List</button>
+      </section>
+
+      <!-- Shopping List Section -->
+      <section id="shopping-section">
+        <h3>Shopping List</h3>
+        <p>Select how you plan to purchase each ingredient (number and type of unit) and enter a price.
+        Prices are saved to the catalog and reused next time.</p>
+        <table id="shopping-table">
+          <thead>
+            <tr>
+              <th>Ingredient</th>
+              <th>Total Needed</th>
+              <th>Unit</th>
+              <th>Number of Units</th>
+              <th>Type of Unit</th>
+              <th>Price</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            <!-- rows injected -->
+          </tbody>
+        </table>
+        <button id="clear-shopping-btn" class="secondary-btn">Clear Shopping List</button>
+      </section>
+
+      <!-- Ingredient Catalog Section -->
+      <section id="catalog-section">
+        <h3>Ingredient Catalog</h3>
+        <p>The catalog stores prices per unit for ingredients. Entries are automatically created when you add prices in the shopping list.</p>
+        <table id="catalog-table">
+          <thead>
+            <tr>
+              <th>Ingredient</th>
+              <th>Number of Units</</th>
+              <th>Unit</th>
+              <th>Price per Unit</th>
+            </tr>
+          </thead>
+          <tbody>
+            <!-- rows injected -->
+          </tbody>
+        </table>
+      </section>
+    </section>
+
+    <!-- INGREDIENT CONVERTER TAB -->
+    <section id="tab-converter" class="tab-content" role="tabpanel" aria-labelledby="tabbtn-converter" hidden>
+      <h2>Ingredient Converter</h2>
+      <p class="intro">
+        Convert metric weights or volume to US cups / tbsp / tsp for common ingredients.
+        Add your own densities (grams per US cup). Saved in your browser.
+      </p>
+
+      <div id="debugBanner" role="status" aria-live="polite" class="debug-banner" style="display:none"></div>
+
+      <section class="card">
+        <div class="controls">
+          <button id="addRowBtn">➕ Add Ingredient</button>
+          <button id="copyTableBtn">📋 Copy All</button>
+          <button id="exportCSVBtn">💾 Export CSV</button>
+          <div class="flex-spacer"></div>
+          <label class="muted"><input id="autoConvertToggle" type="checkbox" checked> Auto-convert</label>
+        </div>
+
+        <div class="table-wrapper">
+          <table id="convTable" aria-label="Ingredient conversions">
+            <thead>
+              <tr>
+                <th class="col-ingredient">Ingredient</th>
+                <th class="col-amount">Amount</th>
+                <th class="col-unit">Unit</th>
+                <th class="col-conversions">Conversions</th>
+                <th class="col-actions">Actions</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+
+        <p class="help">Tip: type an override name to label copies and exports. Add custom densities below.</p>
+      </section>
+
+      <section class="card">
+        <h3 style="margin:0 0 8px 0">Ingredient Manager</h3>
+        <p class="help">Add/edit ingredient densities (grams per US cup). Data saved in your browser.</p>
+
+        <div class="dense-row">
+          <input id="newIngName" type="text" placeholder="Ingredient name" class="grow"/>
+          <input id="newIngDensity" type="number" placeholder="g per cup" class="w-140"/>
+          <button id="addIngredientBtn">➕ Add</button>
+        </div>
+
+        <div id="ingList" class="ing-list"></div>
+
+        <div class="dense-row top-gap">
+          <button id="resetDefaults" class="secondary">Reset Defaults</button>
+          <button id="clearStorage" class="secondary outline">Clear Saved</button>
+        </div>
+
+        <div class="saved-count"><strong>Saved ingredients:</strong> <span id="savedCount" class="muted"></span></div>
+      </section>
+    </section>
+
+    <!-- PREP & PAR LIST TAB -->
+    <!--
+      This tab hosts the Prep & Par List management tool. The entire user interface from the standalone
+      Prep & Par app has been relocated here. It includes a context bar for selecting date, location and shift,
+      a dynamic main region for dashboards, item management, recipe editing, par template editing, modifier settings,
+      exporting worksheets, uploading on‑hand data (via CSV or OCR), generating prep lists and viewing history.
+    -->
+    <section id="tab-preppar" class="tab-content" role="tabpanel" aria-labelledby="tabbtn-preppar" hidden>
+      <!-- Context for Prep & Par: select date, location and shift -->
+      <section class="context">
+        <label>Date
+          <input type="date" id="ctx-date">
+        </label>
+        <label>Location
+          <input id="ctx-location" placeholder="e.g., Main Kitchen" list="known-locations">
+          <datalist id="known-locations"></datalist>
+        </label>
+        <label>Shift
+          <input id="ctx-shift" placeholder="e.g., Lunch, Dinner" list="known-shifts">
+          <datalist id="known-shifts"></datalist>
+        </label>
+        <button id="ctx-save" class="primary">Set Context</button>
+      </section>
+      <main id="view-root"><!-- dynamic views render here --></main>
+      <!-- Template definitions from the Prep & Par app -->
+      <template id="tmpl-dashboard">
+        <div class="panel">
+          <h2>Dashboard</h2>
+          <div class="grid-3">
+            <div class="card">
+              <h3>Quick Actions</h3>
+              <div class="stack">
+                <button data-jump="par" class="secondary">Edit Par Template (ctx)</button>
+                <button data-jump="export" class="secondary">Export On‑Hand Worksheet (ctx)</button>
+                <button data-jump="upload" class="secondary">Upload On‑Hand (CSV/OCR)</button>
+                <button data-jump="generate" class="secondary">Generate Prep (ctx)</button>
+              </div>
+            </div>
+            <div class="card">
+              <h3>Stats (Context)</h3>
+              <div id="dash-stats">—</div>
+            </div>
+            <div class="card">
+              <h3>Recent History</h3>
+              <div id="dash-history">—</div>
+            </div>
+          </div>
+        </div>
+      </template>
+      <template id="tmpl-items">
+        <div class="panel">
+          <h2>Items</h2>
+          <div class="toolbar">
+            <button id="add-item" class="primary">Add Item</button>
+            <button id="export-items" class="secondary">Export Items JSON</button>
+            <label class="filelike">
+              Import Items JSON
+              <input type="file" id="import-items" accept="application/json">
+            </label>
+          </div>
+          <table class="table">
+            <thead>
+              <tr>
+                <th>Item ID</th>
+                <th>Name</th>
+                <th>Type</th>
+                <th>Unit</th>
+                <th>Station</th>
+                <th>Locations</th>
+                <th>Default Batch Yield</th>
+                <th>Notes</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="items-rows"></tbody>
+          </table>
+        </div>
+      </template>
+      <template id="tmpl-recipes">
+        <div class="panel">
+          <h2>Recipes</h2>
+          <div class="toolbar">
+            <button id="add-recipe" class="primary">Add Recipe</button>
+            <button id="export-recipes" class="secondary">Export Recipes JSON</button>
+            <label class="filelike">
+              Import Recipes JSON
+              <input type="file" id="import-recipes" accept="application/json">
+            </label>
+          </div>
+          <table class="table">
+            <thead>
+              <tr>
+                <th>Item ID</th>
+                <th>Yield Amount</th>
+                <th>Yield Unit</th>
+                <th>Ingredients (amount unit name)</th>
+                <th>Instructions</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="recipes-rows"></tbody>
+          </table>
+        </div>
+      </template>
+      <template id="tmpl-par">
+        <div class="panel">
+          <h2>Par Templates</h2>
+          <div class="toolbar">
+            <button id="add-par-line" class="primary">Add Line</button>
+            <button id="save-par" class="secondary">Save Template (ctx)</button>
+            <button id="export-par" class="secondary">Export Par Templates JSON</button>
+            <label class="filelike">
+              Import Par Templates JSON
+              <input type="file" id="import-par" accept="application/json">
+            </label>
+          </div>
+          <div class="note">Template applies to current <strong>Location</strong> &amp; <strong>Shift</strong> in the context bar.</div>
+          <table class="table">
+            <thead>
+              <tr>
+                <th>Station</th>
+                <th>Item ID</th>
+                <th>Item Name</th>
+                <th>Unit</th>
+                <th>Par Amount</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="par-rows"></tbody>
+          </table>
+        </div>
+      </template>
+      <template id="tmpl-modifiers">
+        <div class="panel">
+          <h2>Per‑Shift‑Per‑Day Modifiers</h2>
+          <div class="note">Percent modifiers by weekday for the selected <strong>Location</strong> &amp; <strong>Shift</strong>.</div>
+          <div class="toolbar">
+            <button id="save-modifiers" class="primary">Save Modifiers (ctx)</button>
+            <button id="export-modifiers" class="secondary">Export Modifiers JSON</button>
+            <label class="filelike">
+              Import Modifiers JSON
+              <input type="file" id="import-modifiers" accept="application/json">
+            </label>
+          </div>
+          <table class="table">
+            <thead>
+              <tr>
+                <th>Weekday</th>
+                <th>Percent (e.g., 20 for +20%)</th>
+              </tr>
+            </thead>
+            <tbody id="mod-rows"></tbody>
+          </table>
+        </div>
+      </template>
+      <template id="tmpl-export">
+        <div class="panel">
+          <h2>Export On‑Hand Worksheet</h2>
+          <p>This exports a CSV staff can fill out digitally, or you can print it (File → Print) for handwriting.</p>
+          <div class="toolbar">
+            <button id="export-onhand-csv" class="primary">Download CSV (ctx)</button>
+            <button id="print-worksheet" class="secondary">Print Worksheet (ctx)</button>
+          </div>
+          <div class="note">Columns: date, location, shift, station, item_id, item_name, unit, par, on_hand</div>
+          <div id="worksheet-preview"></div>
+        </div>
+      </template>
+      <template id="tmpl-upload">
+        <div class="panel">
+          <h2>Upload On‑Hand (CSV or OCR)</h2>
+          <div class="grid-2">
+            <div class="card">
+              <h3>CSV Upload (preferred)</h3>
+              <label class="filelike">
+                Choose CSV
+                <input type="file" id="upload-csv" accept=".csv,text/csv">
+              </label>
+              <div id="csv-status">—</div>
+            </div>
+            <div class="card">
+              <h3>Photo/PDF OCR</h3>
+              <label class="filelike">
+                Choose Image/PDF
+                <input type="file" id="upload-ocr" accept="image/*,application/pdf">
+              </label>
+              <div id="ocr-status">—</div>
+              <div class="note">After OCR, you can fix low‑confidence cells before saving.</div>
+            </div>
+          </div>
+          <div id="upload-review"></div>
+        </div>
+      </template>
+      <template id="tmpl-generate">
+        <div class="panel">
+          <h2>Generate Prep List</h2>
+          <div class="toolbar">
+            <button id="calc-prep" class="primary">Calculate (ctx)</button>
+            <button id="export-prep-csv" class="secondary">Export Prep CSV</button>
+            <button id="finalize-prep" class="secondary">Finalize &amp; Save to History</button>
+          </div>
+          <table class="table">
+            <thead>
+              <tr>
+                <th>Station</th>
+                <th>Item</th>
+                <th>Unit</th>
+                <th>Par</th>
+                <th>Modifier %</th>
+                <th>Adj. Par</th>
+                <th>On‑Hand</th>
+                <th>Needed</th>
+                <th>Batch Yield</th>
+                <th>Suggested Prep</th>
+                <th>Assigned To</th>
+                <th>Notes</th>
+              </tr>
+            </thead>
+            <tbody id="prep-rows"></tbody>
+          </table>
+        </div>
+      </template>
+      <template id="tmpl-history">
+        <div class="panel">
+          <h2>History</h2>
+          <div class="toolbar">
+            <button id="export-history" class="secondary">Export Full History JSON</button>
+            <label class="filelike">
+              Import History JSON
+              <input type="file" id="import-history" accept="application/json">
+            </label>
+          </div>
+          <table class="table">
+            <thead>
+              <tr>
+                <th>Date</th><th>Location</th><th>Shift</th><th>Type</th><th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="hist-rows"></tbody>
+          </table>
+        </div>
+      </template>
+    </section>
+
+  </main>
+
+  <footer class="app-footer">
+    <p>Data is saved locally in your browser. To start over, clear your local storage.</p>
+  </footer>
+
+  <script src="script.js"></script>
+  <!-- Load Prep & Par logic after Chef Tools scripts -->
+  <script src="app.js"></script>
+  <script>
+    // Register service worker for offline caching
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('sw.js')
+        .catch(function (err) { console.error('Service Worker registration failed:', err); });
+    }
+  </script>
+</body>
+</html>

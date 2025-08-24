@@ -1,0 +1,10 @@
+{
+  "short_name": "Chef Tools",
+  "name": "Chef Tools Suite",
+  "start_url": ".",
+  "display": "standalone",
+  "background_color": "#f9f9f9",
+  "theme_color": "#4caf50",
+  "description": "Menu Planner, Ingredient Converter & Prep/Par Manager.",
+  "icons": []
+}

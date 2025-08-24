@@ -1,0 +1,335 @@
+/* Unified style: based on Menu Planner palette, applied to both tabs */
+/* --------- Theme variables --------- */
+:root {
+  --brand: #4caf50;
+  --brand-ink: #2f6f31;
+  --bg: #f9f9f9;
+  --ink: #333;
+  --card: #fff;
+  --muted: #666;
+  --border: #ddd;
+  --table-head: #f0f0f0;
+  --accent: #2196f3;     /* old menu planner blue button */
+  --danger: #f44336;
+  --remove: #e91e63;
+  --radius: 10px;
+}
+
+/* --------- Base --------- */
+* { box-sizing: border-box; }
+html, body {
+  margin: 0;
+  padding: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: Arial, Helvetica, sans-serif;
+}
+.app-header, .app-footer {
+  background: var(--brand);
+  color: #fff;
+  padding: 1rem;
+}
+.app-header .brand h1 {
+  margin: 0;
+}
+.app-header .brand p {
+  margin: 0.25rem 0 0 0;
+  opacity: 0.9;
+}
+.app-main {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 1rem;
+}
+.intro { margin: 0.25rem 0 1rem 0; color: #444; }
+
+/* Sections/cards */
+section {
+  margin-bottom: 1.25rem;
+  background: var(--card);
+  padding: 1rem;
+  border-radius: 8px;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.06);
+}
+section h2 { margin: 0 0 0.25rem 0; color: var(--brand-ink); }
+section h3 { margin: 0 0 0.25rem 0; color: var(--brand-ink); }
+
+/* --------- Tabs --------- */
+.tabbar {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+  flex-wrap: wrap;
+}
+.tab {
+  appearance: none;
+  border: 1px solid transparent;
+  background: rgba(255,255,255,0.15);
+  color: #fff;
+  padding: 8px 14px;
+  border-radius: 999px;
+  cursor: pointer;
+  font-weight: 600;
+}
+.tab:hover { background: rgba(255,255,255,0.22); }
+.tab.active {
+  background: #fff;
+  color: var(--brand-ink);
+  border-color: rgba(255,255,255,0.0);
+}
+.tab-content { margin-top: 1rem; }
+.tab-content:not(.active) { display: none; }
+
+/* --------- Tables & inputs (Menu Planner) --------- */
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-bottom: 0.5rem;
+}
+table th, table td {
+  border: 1px solid var(--border);
+  padding: 0.5rem;
+  text-align: left;
+}
+table th { background: var(--table-head); }
+
+table input[type="text"],
+table input[type="number"],
+table select {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 0.25rem;
+  border: 1px solid #ccc;
+  border-radius: 3px;
+}
+
+/* Buttons */
+button {
+  padding: 0.5rem 1rem;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 1rem;
+}
+.add-btn {
+  background: var(--accent);
+  color: white;
+  margin-top: 0.5rem;
+}
+.primary-btn {
+  background: var(--brand);
+  color: white;
+  margin-top: 1rem;
+}
+.secondary-btn {
+  background: var(--danger);
+  color: white;
+  margin-top: 0.5rem;
+}
+.remove-btn {
+  background: var(--remove);
+  color: white;
+  padding: 0.25rem 0.5rem;
+  font-size: 0.875rem;
+}
+input#expected-seats {
+  width: 120px;
+  padding: 0.25rem;
+  border: 1px solid #ccc;
+  border-radius: 3px;
+}
+
+.app-footer p { margin: 0; text-align: center; }
+
+/* --------- Converter styles (rebased to brand) --------- */
+.card { background: var(--card); border-radius: 12px; padding: 16px; box-shadow: 0 6px 20px rgba(20,20,30,0.04); }
+.controls { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 12px; }
+.controls .muted { color: var(--muted); font-size: 0.95rem; }
+.flex-spacer { flex: 1; }
+
+.debug-banner {
+  position: fixed; right: 18px; top: 18px;
+  background: rgba(255,90,90,0.95); color: #fff;
+  padding: 8px 12px; border-radius: 8px; z-index: 10; font-weight: 700;
+}
+
+.table-wrapper { overflow: auto; position: relative; padding-right: 112px; }
+#convTable { width: 100%; border-collapse: collapse; min-width: 720px; table-layout: fixed; }
+#convTable thead th {
+  background: var(--brand);
+  color: #fff;
+  padding: 12px 10px;
+  text-align: left;
+  font-weight: 700;
+}
+#convTable tbody td {
+  padding: 10px 8px;
+  border-bottom: 1px solid #eee;
+  font-size: 0.92rem;
+  vertical-align: middle;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+th.col-ingredient{width:34%} th.col-amount{width:12%} th.col-unit{width:12%} th.col-conversions{width:42%}
+th.col-actions, td.actions{
+  width:100px; min-width:100px; max-width:100px; text-align:right; vertical-align:middle;
+  position: sticky; right:0; background: linear-gradient(0deg,#fff,#fff); box-shadow:-8px 0 8px rgba(0,0,0,0.03); z-index:5;
+}
+
+.ingredient-cell { display: flex; flex-direction: column; gap: 6px; }
+.override-input, .ing-select { width: 100%; padding: 8px; border-radius: 8px; border: 1px solid #eee; background: #fff; }
+.ing-select:focus { outline: 2px solid rgba(76,175,80,0.2); }
+
+.conv-block {
+  display: inline-flex; align-items: center; gap: 8px;
+  background: #fafafa; padding: 6px 8px; border-radius: 8px; margin-right: 6px;
+}
+.conv-copy { background: #eef; border: 1px solid #dde; border-radius: 6px; padding: 4px 6px; cursor: pointer; }
+.removeBtn { background: #fff; color: #b33; border: 1px solid #f3c7c7; padding: 6px 8px; border-radius: 8px; }
+button.secondary { background: #fff; color: var(--brand); border: 1px solid #ddd; }
+button.secondary.outline { background: #fff; color: var(--brand); border: 1px dashed #ddd; }
+
+.dense-row { display: flex; gap: 8px; margin-top: 10px; align-items: center; }
+.grow { flex: 1; }
+.w-140 { width: 140px; }
+.ing-list { margin-top: 12px; max-height: 240px; overflow: auto; }
+.top-gap { margin-top: 12px; }
+.saved-count { margin-top: 10px; }
+.help { color: var(--muted); font-size: 0.95rem; margin-top: 8px; }
+
+/* --------- Prep & Par section overrides --------- */
+/* This section reuses the visual palette of Chef Tools to style the Prep & Par
+   tool imported from the standalone app. It scopes selectors under the #tab-preppar
+   section so that the original dark theme styles are overridden only for this tab. */
+
+#tab-preppar .context {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 1rem;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  margin-bottom: 1rem;
+}
+#tab-preppar .context label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  color: var(--ink);
+  font-weight: 600;
+}
+#tab-preppar .context input {
+  background: #fff;
+  color: var(--ink);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 8px 10px;
+}
+#tab-preppar .primary,
+#tab-preppar .secondary {
+  border-radius: 6px;
+  padding: 0.5rem 0.75rem;
+  cursor: pointer;
+  font-size: 0.9rem;
+}
+#tab-preppar .primary {
+  background: var(--brand);
+  color: #fff;
+  border: none;
+}
+#tab-preppar .secondary {
+  background: var(--accent);
+  color: #fff;
+  border: none;
+}
+#tab-preppar .panel {
+  margin-bottom: 1.25rem;
+  background: var(--card);
+  padding: 1rem;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  box-shadow: 0 2px 6px rgba(0,0,0,0.06);
+}
+#tab-preppar .toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+  margin-bottom: 1rem;
+}
+#tab-preppar .note {
+  color: var(--muted);
+  margin: 0.5rem 0 0.75rem 0;
+}
+#tab-preppar .table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-bottom: 0.5rem;
+}
+#tab-preppar .table th,
+#tab-preppar .table td {
+  border: 1px solid var(--border);
+  padding: 0.5rem;
+  text-align: left;
+  vertical-align: top;
+}
+#tab-preppar .table th {
+  background: var(--table-head);
+  color: var(--ink);
+  font-weight: 600;
+}
+#tab-preppar .table input,
+#tab-preppar .table select,
+#tab-preppar .table textarea {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 0.4rem;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  background: #fff;
+  color: var(--ink);
+}
+#tab-preppar .danger {
+  color: var(--danger);
+}
+#tab-preppar .filelike {
+  display: inline-block;
+  border: 1px dashed var(--border);
+  padding: 0.5rem 0.75rem;
+  border-radius: 6px;
+  cursor: pointer;
+  color: var(--muted);
+}
+#tab-preppar .filelike input { display: none; }
+#tab-preppar .grid-2,
+#tab-preppar .grid-3 {
+  display: grid;
+  gap: 1rem;
+}
+#tab-preppar .grid-2 { grid-template-columns: repeat(2, 1fr); }
+#tab-preppar .grid-3 { grid-template-columns: repeat(3, 1fr); }
+#tab-preppar .card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 1rem;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.06);
+}
+
+@media (max-width: 900px) {
+  #tab-preppar .grid-2,
+  #tab-preppar .grid-3 {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 600px) {
+  table th, table td { font-size: 0.875rem; }
+  button { font-size: 0.9rem; }
+  #convTable { min-width: 640px; }
+}
+@media (max-width: 520px) {
+  #convTable { min-width: 560px; }
+}
