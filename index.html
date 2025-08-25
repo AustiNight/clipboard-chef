@@ -231,7 +231,8 @@
         <button class="nav-btn" data-view="dashboard" aria-selected="true">Dashboard</button>
         <button class="nav-btn" data-view="items" aria-selected="false">Prep Items</button>
         <button class="nav-btn" data-view="recipes" aria-selected="false">Recipes</button>
-        <button class="nav-btn" data-view="par" aria-selected="false">Par Templates</button>
+        <button class="nav-btn" data-view="menuitems" aria-selected="false">Menu Items</button>
+        <button class="nav-btn" data-view="par" aria-selected="false">Par List</button>
         <button class="nav-btn" data-view="export" aria-selected="false">Export Worksheet</button>
         <button class="nav-btn" data-view="upload" aria-selected="false">Upload On‑Hand</button>
         <button class="nav-btn" data-view="generate" aria-selected="false">Generate Prep</button>
@@ -247,7 +248,7 @@
             <div class="card">
               <h3>Quick Actions</h3>
               <div class="stack">
-                <button data-jump="par" class="secondary">Edit Par Template (ctx)</button>
+                <button data-jump="par" class="secondary">Edit Par List (ctx)</button>
                 <button data-jump="export" class="secondary">Export On‑Hand Worksheet (ctx)</button>
                 <button data-jump="upload" class="secondary">Upload On‑Hand (CSV/OCR)</button>
                 <button data-jump="generate" class="secondary">Generate Prep (ctx)</button>
@@ -278,8 +279,7 @@
           <table class="table">
             <thead>
               <tr>
-                <th>Prep Item ID</th>
-                <th>Prep Item Name</th>
+                <th>Prep Item</th>
                 <th>Type</th>
                 <th>Unit</th>
                 <th>Station</th>
@@ -321,23 +321,23 @@
       </template>
       <template id="tmpl-par">
         <div class="panel">
-          <h2>Par Templates</h2>
-          <div class="toolbar">
+        <h2>Par List</h2>
+        <div class="toolbar">
             <button id="add-par-line" class="primary">Add Line</button>
-            <button id="save-par" class="secondary">Save Template (ctx)</button>
-            <button id="export-par" class="secondary">Export Par Templates JSON</button>
+            <button id="save-par" class="secondary">Save List (ctx)</button>
+            <button id="export-par" class="secondary">Export Par Lists JSON</button>
             <label class="filelike">
-              Import Par Templates JSON
+              Import Par Lists JSON
               <input type="file" id="import-par" accept="application/json">
             </label>
           </div>
-          <div class="note">Template applies to current <strong>Location</strong> &amp; <strong>Shift</strong> in the context bar.</div>
+          <div class="note">Par list applies to current <strong>Location</strong> &amp; <strong>Shift</strong> in the context bar.</div>
           <table class="table">
             <thead>
               <tr>
                 <th>Station</th>
-                <th>Prep Item ID</th>
-                <th>Prep Item Name</th>
+                <th>Menu Item</th>
+                <th>Prep Item</th>
                 <th>Unit</th>
                 <th>Par Amount</th>
                 <th></th>
@@ -380,7 +380,7 @@
             <button id="print-worksheet" class="secondary">Print Worksheet (ctx)</button>
           </div>
           <!-- Update the note to reflect the simplified CSV columns.  The context (date, location, shift) and ID columns are implicit in the file name. -->
-          <div class="note">Columns: station, Prep Item, unit, par, on_hand</div>
+          <div class="note">Columns: station, Menu Item, Prep Item, unit, par, on_hand</div>
           <div id="worksheet-preview"></div>
         </div>
       </template>
@@ -419,13 +419,11 @@
           </div>
           <table class="table">
             <thead>
-              <tr>
+            <tr>
                 <th>Station</th>
                 <th>Prep Item</th>
                 <th>Unit</th>
                 <th>Par</th>
-                <th>Modifier %</th>
-                <th>Adj. Par</th>
                 <th>On‑Hand</th>
                 <th>Needed</th>
                 <th>Batch Yield</th>
@@ -455,6 +453,30 @@
               </tr>
             </thead>
             <tbody id="hist-rows"></tbody>
+          </table>
+        </div>
+      </template>
+
+      <!-- Menu Items view for Prep & Par.  Allows editing of menu items directly within the
+           Prep & Par workflow.  Menu Items define dishes composed of prep items and/or
+           ingredients.  Each menu item has a name, description and list of components
+           specified as quantity, unit and name. -->
+      <template id="tmpl-menuitems">
+        <div class="panel">
+          <h2>Menu Items</h2>
+          <div class="toolbar">
+            <button id="add-menu-item" class="primary">Add Menu Item</button>
+            <button id="export-menu-items" class="secondary">Export Menu Items JSON</button>
+            <label class="filelike">
+              Import Menu Items JSON
+              <input type="file" id="import-menu-items" accept="application/json">
+            </label>
+          </div>
+          <table class="table">
+            <thead>
+              <tr><th>Name</th><th>Description</th><th>Components (qty unit name)</th><th></th></tr>
+            </thead>
+            <tbody id="menuitems-rows"></tbody>
           </table>
         </div>
       </template>
