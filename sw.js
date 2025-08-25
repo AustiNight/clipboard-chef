@@ -1,11 +1,13 @@
 /* Service worker for Chef Tools combined suite */
-const CACHE_NAME = 'chef-tools-cache-v1';
+// Bump the cache name whenever the list of cached files changes so that a new cache is created.
+const CACHE_NAME = 'chef-tools-cache-v2';
 const PRECACHE_URLS = [
   './',
   'index.html',
   'style.css',
   'script.js',
   'app.js',
+  'catalog.js',
   'manifest.json'
 ];
 
