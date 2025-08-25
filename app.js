@@ -518,12 +518,119 @@ function renderExport(root) {
     container.appendChild(preview);
   }
   updatePreview();
-  tpl.querySelector('#export-onhand-csv').onclick = ()=>{
-    const rows = generateWorksheetRows(ctx.date, ctx.location, ctx.shift);
-    const csv = worksheetRowsToCSV(rows);
-    const fname = `onhand_${ctx.date}_${ctx.location.replace(/\s+/g,'_')}_${ctx.shift.replace(/\s+/g,'_')}.csv`;
-    downloadFile(fname, 'text/csv', csv);
-  };
+  // Export on-hand worksheet as an Excel file with grouping by station and menu item.
+  const exportBtn = tpl.querySelector('#export-onhand-xlsx');
+  if (exportBtn) {
+    exportBtn.onclick = async () => {
+      const rows = generateWorksheetRows(ctx.date, ctx.location, ctx.shift);
+      // Load menu items from unified catalog, if available
+      let menuItems = [];
+      try {
+        const rawMI = localStorage.getItem('ct_menuItems_v1');
+        if (rawMI) menuItems = JSON.parse(rawMI);
+      } catch (e) {
+        console.warn('Failed to parse menuItems', e);
+      }
+      // Build a mapping from prep item name (case-insensitive) to array of menu item names that reference it
+      const prepToMenu = {};
+      menuItems.forEach(mi => {
+        (mi.components || []).forEach(c => {
+          if (!c || !c.name) return;
+          const key = c.name.trim().toLowerCase();
+          if (!prepToMenu[key]) prepToMenu[key] = [];
+          if (!prepToMenu[key].includes(mi.name)) prepToMenu[key].push(mi.name);
+        });
+      });
+      // Group rows by station and then by menu item
+      const stationGroups = {};
+      rows.forEach(r => {
+        const station = r.station || '';
+        if (!stationGroups[station]) stationGroups[station] = [];
+        stationGroups[station].push(r);
+      });
+      // Dynamically import ExcelJS if available
+      if (typeof ExcelJS === 'undefined') {
+        alert('ExcelJS library not loaded. Please ensure exceljs is included in the page.');
+        return;
+      }
+      const workbook = new ExcelJS.Workbook();
+      const sheet = workbook.addWorksheet('On-Hand');
+      // Set column widths for readability
+      sheet.columns = [
+        { header: 'Station', key: 'station', width: 20 },
+        { header: 'Menu Item', key: 'menu', width: 25 },
+        { header: 'Prep Item', key: 'prep', width: 25 },
+        { header: 'Unit', key: 'unit', width: 12 },
+        { header: 'On-Hand', key: 'onhand', width: 12 },
+        { header: 'Par', key: 'par', width: 10 }
+      ];
+      // We'll build the sheet row by row
+      let currentRow = 1;
+      Object.keys(stationGroups).forEach(station => {
+        const rowsForStation = stationGroups[station];
+        // Build mapping of menuName -> array of row objects for this station
+        const menuGroups = {};
+        rowsForStation.forEach(r => {
+          const prepKey = (r.item_name || '').trim().toLowerCase();
+          // Determine menu names this prep item belongs to; fallback to using the prep item name itself
+          let names = prepToMenu[prepKey] && prepToMenu[prepKey].length ? prepToMenu[prepKey] : [r.item_name];
+          names.forEach(mn => {
+            if (!menuGroups[mn]) menuGroups[mn] = [];
+            // clone row with on_hand value
+            menuGroups[mn].push({
+              prep: r.item_name,
+              unit: r.unit,
+              par: r.par,
+              onhand: r.on_hand || ''
+            });
+          });
+        });
+        const startRow = currentRow;
+        // Write station header row
+        sheet.getCell(currentRow, 1).value = station;
+        sheet.getRow(currentRow).font = { bold: true };
+        currentRow++;
+        // For each menu group
+        Object.keys(menuGroups).forEach(menuName => {
+          const group = menuGroups[menuName];
+          group.forEach((item, idx) => {
+            const row = sheet.getRow(currentRow);
+            if (idx === 0) {
+              row.getCell(2).value = menuName;
+              row.getCell(2).font = { bold: true };
+            }
+            row.getCell(3).value = item.prep;
+            row.getCell(4).value = item.unit;
+            row.getCell(5).value = item.onhand;
+            row.getCell(6).value = item.par;
+            currentRow++;
+          });
+        });
+        // Blank row inside border
+        currentRow++;
+        const endRow = currentRow - 1; // Last row in station box (blank row included)
+        // Apply thick border around the station box
+        for (let r = startRow; r <= endRow; r++) {
+          for (let c = 1; c <= 6; c++) {
+            const cell = sheet.getCell(r, c);
+            const border = {};
+            if (r === startRow) border.top = { style: 'medium', color: { argb: 'FF000000' } };
+            if (r === endRow) border.bottom = { style: 'medium', color: { argb: 'FF000000' } };
+            if (c === 1) border.left = { style: 'medium', color: { argb: 'FF000000' } };
+            if (c === 6) border.right = { style: 'medium', color: { argb: 'FF000000' } };
+            cell.border = Object.assign({}, cell.border || {}, border);
+          }
+        }
+        // Leave one extra empty row between station boxes (not inside border)
+        currentRow++;
+      });
+      // Generate buffer and trigger download.  The helper will wrap the ArrayBuffer into a Blob with the provided MIME type.
+      const buffer = await workbook.xlsx.writeBuffer();
+      const fname = `onhand_${ctx.date}_${ctx.location.replace(/\s+/g,'_')}_${ctx.shift.replace(/\s+/g,'_')}.xlsx`;
+      downloadFile(fname, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', buffer);
+    };
+  }
+  // Keep print functionality as-is
   tpl.querySelector('#print-worksheet').onclick = ()=>{
     window.print();
   };
