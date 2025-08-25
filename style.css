@@ -80,6 +80,65 @@ section h3 { margin: 0 0 0.25rem 0; color: var(--brand-ink); }
 .tab-content { margin-top: 1rem; }
 .tab-content:not(.active) { display: none; }
 
+/* --------- Catalog styles --------- */
+.subcatalog {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 0.75rem;
+  flex-wrap: wrap;
+}
+.catalog-btn {
+  appearance: none;
+  border: 1px solid var(--border);
+  background: var(--table-head);
+  padding: 6px 12px;
+  border-radius: 999px;
+  cursor: pointer;
+  font-weight: 600;
+  color: var(--ink);
+}
+.catalog-btn:hover {
+  background: rgba(0,0,0,0.05);
+}
+.catalog-btn.active,
+.catalog-btn[aria-selected="true"] {
+  background: var(--brand);
+  color: #fff;
+}
+.catalog-content {
+  display: none;
+}
+.catalog-content:not([hidden]) {
+  display: block;
+}
+
+/* --------- Prep & Par subnavigation --------- */
+.subnav {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin: 0.75rem 0;
+}
+.subnav .nav-btn {
+  appearance: none;
+  border: 1px solid var(--border);
+  background: var(--table-head);
+  color: var(--ink);
+  padding: 6px 12px;
+  border-radius: 999px;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 0.95rem;
+}
+.subnav .nav-btn:hover {
+  background: rgba(0,0,0,0.05);
+}
+.subnav .nav-btn.active,
+.subnav .nav-btn[aria-selected="true"] {
+  background: var(--brand);
+  color: #fff;
+}
+
 /* --------- Tables & inputs (Menu Planner) --------- */
 table {
   width: 100%;
