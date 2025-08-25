@@ -229,7 +229,7 @@
         -->
       <nav class="subnav" aria-label="Prep & Par navigation">
         <button class="nav-btn" data-view="dashboard" aria-selected="true">Dashboard</button>
-        <button class="nav-btn" data-view="items" aria-selected="false">Items</button>
+        <button class="nav-btn" data-view="items" aria-selected="false">Prep Items</button>
         <button class="nav-btn" data-view="recipes" aria-selected="false">Recipes</button>
         <button class="nav-btn" data-view="par" aria-selected="false">Par Templates</button>
         <button class="nav-btn" data-view="export" aria-selected="false">Export Worksheet</button>
@@ -266,20 +266,20 @@
       </template>
       <template id="tmpl-items">
         <div class="panel">
-          <h2>Items</h2>
+          <h2>Prep Items</h2>
           <div class="toolbar">
-            <button id="add-item" class="primary">Add Item</button>
-            <button id="export-items" class="secondary">Export Items JSON</button>
+            <button id="add-item" class="primary">Add Prep Item</button>
+            <button id="export-items" class="secondary">Export Prep Items JSON</button>
             <label class="filelike">
-              Import Items JSON
+              Import Prep Items JSON
               <input type="file" id="import-items" accept="application/json">
             </label>
           </div>
           <table class="table">
             <thead>
               <tr>
-                <th>Item ID</th>
-                <th>Name</th>
+                <th>Prep Item ID</th>
+                <th>Prep Item Name</th>
                 <th>Type</th>
                 <th>Unit</th>
                 <th>Station</th>
@@ -307,7 +307,7 @@
           <table class="table">
             <thead>
               <tr>
-                <th>Item ID</th>
+                <th>Prep Item</th>
                 <th>Yield Amount</th>
                 <th>Yield Unit</th>
                 <th>Ingredients (amount unit name)</th>
@@ -336,8 +336,8 @@
             <thead>
               <tr>
                 <th>Station</th>
-                <th>Item ID</th>
-                <th>Item Name</th>
+                <th>Prep Item ID</th>
+                <th>Prep Item Name</th>
                 <th>Unit</th>
                 <th>Par Amount</th>
                 <th></th>
@@ -375,10 +375,12 @@
           <h2>Export On‑Hand Worksheet</h2>
           <p>This exports a CSV staff can fill out digitally, or you can print it (File → Print) for handwriting.</p>
           <div class="toolbar">
-            <button id="export-onhand-csv" class="primary">Download CSV (ctx)</button>
+            <!-- Export on-hand list as an Excel (.xlsx) file instead of CSV. -->
+            <button id="export-onhand-xlsx" class="primary">Download XLSX (ctx)</button>
             <button id="print-worksheet" class="secondary">Print Worksheet (ctx)</button>
           </div>
-          <div class="note">Columns: date, location, shift, station, item_id, item_name, unit, par, on_hand</div>
+          <!-- Update the note to reflect the simplified CSV columns.  The context (date, location, shift) and ID columns are implicit in the file name. -->
+          <div class="note">Columns: station, Prep Item, unit, par, on_hand</div>
           <div id="worksheet-preview"></div>
         </div>
       </template>
@@ -419,7 +421,7 @@
             <thead>
               <tr>
                 <th>Station</th>
-                <th>Item</th>
+                <th>Prep Item</th>
                 <th>Unit</th>
                 <th>Par</th>
                 <th>Modifier %</th>
@@ -498,6 +500,8 @@
   <script src="app.js"></script>
   <!-- Load Data Catalog script after prep & par logic so it can sync with the global state if available -->
   <script src="catalog.js"></script>
+  <!-- ExcelJS library for generating XLSX files with formatting -->
+  <script src="https://cdn.jsdelivr.net/npm/exceljs@4.3.0/dist/exceljs.min.js"></script>
   <script>
     // Register service worker for offline caching
     if ('serviceWorker' in navigator) {
