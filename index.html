@@ -29,6 +29,10 @@
               role="tab" aria-selected="false" aria-controls="tab-preppar">
         Prep &amp; Par List
       </button>
+        <button id="tabbtn-catalog" class="tab" data-tab="catalog"
+                role="tab" aria-selected="false" aria-controls="tab-catalog">
+          Catalog
+        </button>
     </nav>
   </header>
 
@@ -218,6 +222,22 @@
         </label>
         <button id="ctx-save" class="primary">Set Context</button>
       </section>
+
+      <!-- Subnavigation for Prep & Par views.  These buttons switch between the different
+           views (dashboard, items, recipes, par templates, export, upload, generate and history).
+           Using data-view attributes allows the main app script to route accordingly.
+        -->
+      <nav class="subnav" aria-label="Prep & Par navigation">
+        <button class="nav-btn" data-view="dashboard" aria-selected="true">Dashboard</button>
+        <button class="nav-btn" data-view="items" aria-selected="false">Items</button>
+        <button class="nav-btn" data-view="recipes" aria-selected="false">Recipes</button>
+        <button class="nav-btn" data-view="par" aria-selected="false">Par Templates</button>
+        <button class="nav-btn" data-view="export" aria-selected="false">Export Worksheet</button>
+        <button class="nav-btn" data-view="upload" aria-selected="false">Upload On‑Hand</button>
+        <button class="nav-btn" data-view="generate" aria-selected="false">Generate Prep</button>
+        <button class="nav-btn" data-view="history" aria-selected="false">History</button>
+      </nav>
+
       <main id="view-root"><!-- dynamic views render here --></main>
       <!-- Template definitions from the Prep & Par app -->
       <template id="tmpl-dashboard">
@@ -258,12 +278,10 @@
           <table class="table">
             <thead>
               <tr>
-                <!-- Remove Item ID column from the UI.  We store IDs internally on each item but
-                     show only editable fields relevant to chefs. -->
+                <th>Item ID</th>
                 <th>Name</th>
                 <th>Type</th>
                 <th>Unit</th>
-                <th>Unit Count</th>
                 <th>Station</th>
                 <th>Locations</th>
                 <th>Default Batch Yield</th>
@@ -289,8 +307,7 @@
           <table class="table">
             <thead>
               <tr>
-                <!-- Use human-readable item names instead of internal IDs -->
-                <th>Item</th>
+                <th>Item ID</th>
                 <th>Yield Amount</th>
                 <th>Yield Unit</th>
                 <th>Ingredients (amount unit name)</th>
@@ -319,9 +336,8 @@
             <thead>
               <tr>
                 <th>Station</th>
-                <!-- Collapse the old Item ID/Item Name columns into a single Item column that shows the
-                     human‑readable name while storing the ID under the hood -->
-                <th>Item</th>
+                <th>Item ID</th>
+                <th>Item Name</th>
                 <th>Unit</th>
                 <th>Par Amount</th>
                 <th></th>
@@ -362,7 +378,7 @@
             <button id="export-onhand-csv" class="primary">Download CSV (ctx)</button>
             <button id="print-worksheet" class="secondary">Print Worksheet (ctx)</button>
           </div>
-          <div class="note">Columns: station, item, unit, par, on_hand</div>
+          <div class="note">Columns: date, location, shift, station, item_id, item_name, unit, par, on_hand</div>
           <div id="worksheet-preview"></div>
         </div>
       </template>
@@ -406,6 +422,8 @@
                 <th>Item</th>
                 <th>Unit</th>
                 <th>Par</th>
+                <th>Modifier %</th>
+                <th>Adj. Par</th>
                 <th>On‑Hand</th>
                 <th>Needed</th>
                 <th>Batch Yield</th>
@@ -440,6 +458,35 @@
       </template>
     </section>
 
+    <!-- CATALOG TAB -->
+    <!--
+      This section hosts the Data Catalog, which provides unified management for all core objects: Ingredients,
+      Prep Items, Recipes and Menu Items.  Users can add, edit and delete entries and these entries are shared
+      across the Menu Planner, Ingredient Converter and Prep & Par tools.  A sub-navigation allows switching
+      between the object types.
+    -->
+    <section id="tab-catalog" class="tab-content" role="tabpanel" aria-labelledby="tabbtn-catalog" hidden>
+      <h2>Data Catalog</h2>
+      <p class="intro">
+        Manage shared data across all tools. Create and edit Ingredients, Prep Items, Recipes and Menu Items here.
+      </p>
+      <nav class="subcatalog" aria-label="Catalog subnav">
+        <button class="catalog-btn" data-category="ingredients" aria-selected="true">Ingredients</button>
+        <button class="catalog-btn" data-category="prepItems" aria-selected="false">Prep Items</button>
+        <button class="catalog-btn" data-category="recipes" aria-selected="false">Recipes</button>
+        <button class="catalog-btn" data-category="menuItems" aria-selected="false">Menu Items</button>
+      </nav>
+      <section id="catalog-ingredients" class="catalog-content">
+        <!-- Content for ingredients will be rendered by script.js -->
+      </section>
+      <section id="catalog-prepItems" class="catalog-content" hidden>
+      </section>
+      <section id="catalog-recipes" class="catalog-content" hidden>
+      </section>
+      <section id="catalog-menuItems" class="catalog-content" hidden>
+      </section>
+    </section>
+
   </main>
 
   <footer class="app-footer">
@@ -449,6 +496,8 @@
   <script src="script.js"></script>
   <!-- Load Prep & Par logic after Chef Tools scripts -->
   <script src="app.js"></script>
+  <!-- Load Data Catalog script after prep & par logic so it can sync with the global state if available -->
+  <script src="catalog.js"></script>
   <script>
     // Register service worker for offline caching
     if ('serviceWorker' in navigator) {
