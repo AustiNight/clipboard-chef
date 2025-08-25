@@ -1,6 +1,8 @@
 /* Service worker for Chef Tools combined suite */
 // Bump the cache name whenever the list of cached files changes so that a new cache is created.
-const CACHE_NAME = 'chef-tools-cache-v2';
+// The version number must be incremented whenever new assets are added or logic is updated
+// to ensure clients receive fresh content.  v3 includes catalog.js and ExcelJS support.
+const CACHE_NAME = 'chef-tools-cache-v3';
 const PRECACHE_URLS = [
   './',
   'index.html',
@@ -8,7 +10,9 @@ const PRECACHE_URLS = [
   'script.js',
   'app.js',
   'catalog.js',
-  'manifest.json'
+  'manifest.json',
+  // Cache ExcelJS library for offline XLSX generation
+  'https://cdn.jsdelivr.net/npm/exceljs@4.3.0/dist/exceljs.min.js'
 ];
 
 self.addEventListener('install', event => {
