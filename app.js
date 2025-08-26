@@ -185,6 +185,7 @@ function routeTo(view) {
     case 'items': renderItems(root); break;
     case 'recipes': renderRecipes(root); break;
     case 'par': renderPar(root); break;
+    case 'menuitems': renderMenuItemsPP(root); break;
     case 'modifiers': renderModifiers(root); break;
     case 'export': renderExport(root); break;
     case 'upload': renderUpload(root); break;
@@ -256,7 +257,6 @@ function renderItems(root) {
     state.items.forEach((it, idx) => {
       const tr = document.createElement('tr');
       tr.innerHTML = `
-        <td><input value="${it.id||''}" data-k="id"></td>
         <td><input value="${it.name||''}" data-k="name"></td>
         <td>
           <select data-k="type">
@@ -312,7 +312,7 @@ function renderRecipes(root) {
       tr.innerHTML = `
         <td>
           <select data-k="itemId">
-            ${state.items.map(it=>`<option value="${it.id}" ${r.itemId===it.id?'selected':''}>${it.id}</option>`).join('')}
+            ${state.items.map(it=>`<option value="${it.id}" ${r.itemId===it.id?'selected':''}>${it.name || it.id}</option>`).join('')}
           </select>
         </td>
         <td><input type="number" min="0" data-k="yield_amount" value="${r.yield_amount??''}"></td>
@@ -373,27 +373,51 @@ function renderPar(root) {
   const tbody = tpl.querySelector('#par-rows');
   const ctx = state.context;
   const template = ensureParTemplate(ctx.location, ctx.shift);
+  // Load unified menu items from catalog (if any)
+  let menuList = [];
+  try {
+    const rawMI = localStorage.getItem('ct_menuItems_v1');
+    if (rawMI) {
+      menuList = JSON.parse(rawMI) || [];
+    }
+  } catch (err) {
+    console.warn('Failed to load menu items for par list', err);
+  }
   function draw() {
     tbody.innerHTML = '';
     template.lines.forEach((line, idx) => {
+      // If line doesn't have menuItemId property (legacy), initialize to first menu item or blank
+      if (line.menuItemId === undefined) {
+        line.menuItemId = menuList[0]?.id || '';
+      }
       const item = state.items.find(i=>i.id===line.itemId);
+      const menuItem = menuList.find(m=>m.id===line.menuItemId);
       const tr = document.createElement('tr');
       tr.innerHTML = `
         <td>${item?.station || ''}</td>
         <td>
-          <select data-k="itemId">
-            ${state.items.map(i=>`<option value="${i.id}" ${line.itemId===i.id?'selected':''}>${i.id}</option>`).join('')}
+          <select data-k="menuItemId">
+            ${menuList.map(mi=>`<option value="${mi.id}" ${line.menuItemId===mi.id?'selected':''}>${mi.name || mi.id}</option>`).join('')}
           </select>
         </td>
-        <td>${item?.name || ''}</td>
+        <td>
+          <select data-k="itemId">
+            ${state.items.map(i=>`<option value="${i.id}" ${line.itemId===i.id?'selected':''}>${i.name || i.id}</option>`).join('')}
+          </select>
+        </td>
         <td>${item?.unit || ''}</td>
         <td><input type="number" min="0" data-k="parAmount" value="${line.parAmount??0}"></td>
         <td><button data-act="del" class="secondary">Remove</button></td>
       `;
       tr.oninput = (e)=>{
         const el=e.target, k=el.dataset.k; if(!k) return;
-        if (k==='parAmount') line[k] = Number(el.value)||0;
-        if (k==='itemId') line[k] = el.value;
+        if (k==='parAmount') {
+          line.parAmount = Number(el.value)||0;
+        } else if (k==='itemId') {
+          line.itemId = el.value;
+        } else if (k==='menuItemId') {
+          line.menuItemId = el.value;
+        }
         persistAll(); draw();
       };
       tr.querySelector('button[data-act="del"]').onclick=()=>{ template.lines.splice(idx,1); persistAll(); draw(); };
@@ -402,13 +426,15 @@ function renderPar(root) {
   }
   draw();
   tpl.querySelector('#add-par-line').onclick = ()=>{
-    const first = state.items[0]; if (!first) return alert('Add items first.');
-    template.lines.push({ itemId: first.id, parAmount: 0 });
+    const firstItem = state.items[0];
+    if (!firstItem) return alert('Add items first.');
+    const firstMenu = menuList[0];
+    template.lines.push({ menuItemId: firstMenu ? firstMenu.id : '', itemId: firstItem.id, parAmount: 0 });
     persistAll(); draw();
   };
-  tpl.querySelector('#save-par').onclick = ()=>{ persistAll(); alert('Par template saved.'); };
+  tpl.querySelector('#save-par').onclick = ()=>{ persistAll(); alert('Par list saved.'); };
   tpl.querySelector('#export-par').onclick = ()=>{
-    downloadFile('parTemplates.json','application/json', JSON.stringify(state.parTemplates,null,2));
+    downloadFile('parLists.json','application/json', JSON.stringify(state.parTemplates,null,2));
   };
   tpl.querySelector('#import-par').onchange = async (e)=>{
     const f=e.target.files[0]; if(!f) return;
@@ -447,18 +473,103 @@ function renderModifiers(root) {
 }
 
 /* --------------------------------------------------------------------- */
+/* Menu Items for Prep & Par */
+function renderMenuItemsPP(root) {
+  const tpl = $('#tmpl-menuitems').content.cloneNode(true);
+  const tbody = tpl.querySelector('#menuitems-rows');
+  // Load menu items from unified catalog or fallback
+  let menuItems = [];
+  try {
+    const raw = localStorage.getItem('ct_menuItems_v1');
+    if (raw) menuItems = JSON.parse(raw) || [];
+  } catch (err) {
+    console.warn('Failed to load menu items for PP', err);
+  }
+  function save() {
+    localStorage.setItem('ct_menuItems_v1', JSON.stringify(menuItems));
+  }
+  function draw() {
+    tbody.innerHTML = '';
+    menuItems.forEach((mi, idx) => {
+      const tr = document.createElement('tr');
+      const compsStr = (mi.components || []).map(c => `${c.qty} ${c.unit} ${c.name}`).join(' | ');
+      tr.innerHTML = `
+        <td><input type="text" data-k="name" value="${mi.name || ''}"></td>
+        <td><input type="text" data-k="description" value="${mi.description || ''}"></td>
+        <td><textarea data-k="components">${compsStr}</textarea></td>
+        <td><button data-act="del" class="secondary">Delete</button></td>
+      `;
+      tr.oninput = (ev) => {
+        const el = ev.target;
+        const k = el.dataset.k;
+        if (!k) return;
+        if (k === 'components') {
+          mi.components = el.value.split('|').map(s => s.trim()).filter(Boolean).map(seg => {
+            const parts = seg.trim().split(/\s+/);
+            const qty = Number(parts.shift());
+            const unit = parts.shift() || '';
+            const name = parts.join(' ');
+            return { qty: qty, unit: unit, name: name };
+          });
+        } else {
+          mi[k] = el.value;
+        }
+        save();
+        // no immediate redraw; we update UI in place
+      };
+      tr.querySelector('button[data-act="del"]').onclick = () => {
+        menuItems.splice(idx, 1);
+        save();
+        draw();
+      };
+      tbody.appendChild(tr);
+    });
+  }
+  // Setup toolbar actions
+  const addBtn = tpl.querySelector('#add-menu-item');
+  if (addBtn) {
+    addBtn.onclick = () => {
+      menuItems.push({ id: `menu_${Date.now()}`, name: '', description: '', components: [] });
+      save();
+      draw();
+    };
+  }
+  const exportBtn = tpl.querySelector('#export-menu-items');
+  if (exportBtn) {
+    exportBtn.onclick = () => {
+      downloadFile('menuItems.json', 'application/json', JSON.stringify(menuItems, null, 2));
+    };
+  }
+  const importInput = tpl.querySelector('#import-menu-items');
+  if (importInput) {
+    importInput.onchange = async (e) => {
+      const f = e.target.files[0]; if (!f) return;
+      const txt = await f.text();
+      try {
+        menuItems = JSON.parse(txt) || [];
+      } catch (err) {
+        alert('Failed to parse JSON');
+        return;
+      }
+      save();
+      draw();
+    };
+  }
+  draw();
+  root.appendChild(tpl);
+}
+
+/* --------------------------------------------------------------------- */
 /* Generate worksheet rows for CSV/export */
 function generateWorksheetRows(date, location, shift) {
   const rows = [];
   const template = getParTemplate(location, shift);
   if (!template) return rows;
-  const mod = ensureModifiers(location, shift);
-  const weekday = todayWeekdayIndex(date);
-  const pct = mod.byWeekday[weekday] || 0;
+  // Modifiers are deprecated.  Use the base par amount directly and include menu item ID if present.
   template.lines.forEach(line => {
     const item = state.items.find(i => i.id === line.itemId);
     if (!item) return;
-    const adjPar = Math.round(line.parAmount * (1 + pct / 100));
+    const parAmt = line.parAmount;
     rows.push({
       date,
       location,
@@ -467,8 +578,9 @@ function generateWorksheetRows(date, location, shift) {
       item_id: line.itemId,
       item_name: item.name || '',
       unit: item.unit || '',
-      par: adjPar,
-      on_hand: ''
+      par: parAmt,
+      on_hand: '',
+      menuItemId: line.menuItemId || ''
     });
   });
   return rows;
@@ -476,10 +588,31 @@ function generateWorksheetRows(date, location, shift) {
 
 /* Create CSV from worksheet rows */
 function worksheetRowsToCSV(rows) {
-  const header = ['date','location','shift','station','item_id','item_name','unit','par','on_hand'];
+  // CSV output with simplified columns: station, menu_item, prep_item, unit, par, on_hand.  Menu item
+  // names are derived using the menuItemId property if available.  If menu items are not defined,
+  // fallback to a blank value.  Prep item name is taken from item_name.
+  const header = ['station','menu_item','prep_item','unit','par','on_hand'];
   const lines = [header.map(csvEscape).join(',')];
+  // Load menu items for look up
+  let menuMap = {};
+  try {
+    const rawMI = localStorage.getItem('ct_menuItems_v1');
+    if (rawMI) {
+      const arr = JSON.parse(rawMI) || [];
+      arr.forEach(mi => { menuMap[mi.id] = mi.name || mi.id; });
+    }
+  } catch {}
   rows.forEach(r => {
-    lines.push(header.map(col => csvEscape(r[col] ?? '')).join(','));
+    const miName = r.menuItemId ? (menuMap[r.menuItemId] || '') : '';
+    const obj = {
+      station: r.station,
+      menu_item: miName,
+      prep_item: r.item_name,
+      unit: r.unit,
+      par: r.par,
+      on_hand: r.on_hand
+    };
+    lines.push(header.map(col => csvEscape(obj[col] ?? '')).join(','));
   });
   return lines.join('\n');
 }
@@ -489,15 +622,28 @@ function worksheetRowsToHTMLTable(rows) {
   const table = document.createElement('table');
   table.className = 'table';
   const thead = document.createElement('thead');
-  thead.innerHTML = '<tr><th>Date</th><th>Location</th><th>Shift</th><th>Station</th><th>Item</th><th>Unit</th><th>Par</th><th>On‑Hand</th></tr>';
+  thead.innerHTML = '<tr><th>Station</th><th>Menu Item</th><th>Prep Item</th><th>Unit</th><th>Par</th><th>On‑Hand</th></tr>';
   table.appendChild(thead);
   const tbody = document.createElement('tbody');
+  // Build a lookup of menu item names
+  let menuMap = {};
+  try {
+    const rawMI = localStorage.getItem('ct_menuItems_v1');
+    if (rawMI) {
+      const arr = JSON.parse(rawMI) || [];
+      arr.forEach(mi => { menuMap[mi.id] = mi.name || mi.id; });
+    }
+  } catch {}
   rows.forEach(r => {
     const tr = document.createElement('tr');
+    const miName = r.menuItemId ? (menuMap[r.menuItemId] || '') : '';
     tr.innerHTML = `
-      <td>${r.date}</td><td>${r.location}</td><td>${r.shift}</td>
-      <td>${r.station}</td><td>${r.item_name}</td><td>${r.unit}</td>
-      <td>${r.par}</td><td>${r.on_hand}</td>
+      <td>${r.station}</td>
+      <td>${miName}</td>
+      <td>${r.item_name}</td>
+      <td>${r.unit}</td>
+      <td>${r.par}</td>
+      <td>${r.on_hand}</td>
     `;
     tbody.appendChild(tr);
   });
@@ -531,7 +677,10 @@ function renderExport(root) {
       } catch (e) {
         console.warn('Failed to parse menuItems', e);
       }
-      // Build a mapping from prep item name (case-insensitive) to array of menu item names that reference it
+      // Build a mapping of menu ID -> name for quick lookups
+      const menuIdToName = {};
+      menuItems.forEach(mi => { menuIdToName[mi.id] = mi.name || mi.id; });
+      // Build a fallback mapping from prep item names to menu names (for legacy rows without menuItemId)
       const prepToMenu = {};
       menuItems.forEach(mi => {
         (mi.components || []).forEach(c => {
@@ -541,7 +690,7 @@ function renderExport(root) {
           if (!prepToMenu[key].includes(mi.name)) prepToMenu[key].push(mi.name);
         });
       });
-      // Group rows by station and then by menu item
+      // Group rows by station
       const stationGroups = {};
       rows.forEach(r => {
         const station = r.station || '';
@@ -568,15 +717,19 @@ function renderExport(root) {
       let currentRow = 1;
       Object.keys(stationGroups).forEach(station => {
         const rowsForStation = stationGroups[station];
-        // Build mapping of menuName -> array of row objects for this station
+        // Build mapping of menuName -> array of row objects for this station.  Use the explicit
+        // menuItemId when present; otherwise fallback to names derived from prepToMenu.
         const menuGroups = {};
         rowsForStation.forEach(r => {
-          const prepKey = (r.item_name || '').trim().toLowerCase();
-          // Determine menu names this prep item belongs to; fallback to using the prep item name itself
-          let names = prepToMenu[prepKey] && prepToMenu[prepKey].length ? prepToMenu[prepKey] : [r.item_name];
+          let names = [];
+          if (r.menuItemId && menuIdToName[r.menuItemId]) {
+            names = [menuIdToName[r.menuItemId]];
+          } else {
+            const prepKey = (r.item_name || '').trim().toLowerCase();
+            names = prepToMenu[prepKey] && prepToMenu[prepKey].length ? prepToMenu[prepKey] : [r.item_name];
+          }
           names.forEach(mn => {
             if (!menuGroups[mn]) menuGroups[mn] = [];
-            // clone row with on_hand value
             menuGroups[mn].push({
               prep: r.item_name,
               unit: r.unit,

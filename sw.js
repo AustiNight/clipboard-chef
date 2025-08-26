@@ -9,7 +9,7 @@ const PRECACHE_URLS = [
   'style.css',
   'script.js',
   'app.js',
-  'catalog.js',
+  // catalog.js is now embedded inline in index.html, so no need to pre-cache it.
   'manifest.json',
   // Cache ExcelJS library for offline XLSX generation
   'https://cdn.jsdelivr.net/npm/exceljs@4.3.0/dist/exceljs.min.js'

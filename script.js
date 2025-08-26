@@ -54,7 +54,8 @@
   });
   // Initial tab from hash: support the new "preppar" tab as well
   const initialTab = location.hash.replace('#','') || 'menu';
-  if (['menu','converter','preppar'].includes(initialTab)) {
+  // include the new 'catalog' tab when validating the initial hash
+  if (['menu','converter','preppar','catalog'].includes(initialTab)) {
     setActive(initialTab);
   } else {
     setActive('menu');
@@ -510,6 +511,64 @@
   let tbody, addRowBtn, copyTableBtn, exportCSVBtn, autoConvertToggle, ingListEl, savedCountEl, addIngredientBtn, newIngName, newIngDensity, resetDefaultsBtn, clearStorageBtn, debugBanner;
   let densities = {};
 
+  /*
+    Synchronization between unified Catalog ingredients and the Converter densities.
+
+    The Ingredient Converter originally stores ingredient densities in
+    `chef_ing_densities_v1`.  The new unified data model stores all ingredients
+    as objects in `ct_ingredients_v1` with fields `name`, `density` and
+    optional `price`.  To keep data consistent:
+      - When loading densities, we merge values from both `chef_ing_densities_v1`
+        and `ct_ingredients_v1` (unified ingredients) into the `densities`
+        object.
+      - When densities are saved or modified through the Converter, we update
+        both `chef_ing_densities_v1` and `ct_ingredients_v1` accordingly.  New
+        ingredients added in the converter are created in the unified data with
+        undefined price.
+  */
+  function syncDensitiesFromUnified() {
+    try {
+      const raw = localStorage.getItem('ct_ingredients_v1');
+      if (!raw) return;
+      const arr = JSON.parse(raw) || [];
+      arr.forEach(ing => {
+        if (ing && typeof ing.name === 'string' && ing.density != null) {
+          densities[ing.name] = ing.density;
+        }
+      });
+    } catch (err) {
+      console.warn('Failed to merge unified ingredient densities', err);
+    }
+  }
+  function syncUnifiedFromDensities() {
+    try {
+      // Update unified catalog (ct_ingredients_v1) with current densities, preserving existing price if present
+      const raw = localStorage.getItem('ct_ingredients_v1');
+      let arr = [];
+      if (raw) {
+        try { arr = JSON.parse(raw) || []; } catch (_) { arr = []; }
+      }
+      // Build a map for quick lookup
+      const map = {};
+      arr.forEach(item => { if (item && item.name) map[item.name] = item; });
+      for (const name in densities) {
+        const densVal = densities[name];
+        if (!map[name]) {
+          map[name] = { name: name, density: densVal, price: null };
+        } else {
+          map[name].density = densVal;
+        }
+      }
+      // Rebuild array from map
+      const out = Object.values(map);
+      localStorage.setItem('ct_ingredients_v1', JSON.stringify(out));
+      // Also save densities to the legacy key so old code stays in sync
+      localStorage.setItem(STORAGE_ING, JSON.stringify(densities));
+    } catch (err) {
+      console.warn('Failed to sync densities to unified storage', err);
+    }
+  }
+
   function el(tag, props={}, ...children){
     const n = document.createElement(tag);
     for (const k in props) {
@@ -544,7 +603,13 @@
       return {...DEFAULT_DENSITIES};
     }
   }
-  function saveDensities(){ try{ localStorage.setItem(STORAGE_ING, JSON.stringify(densities)); }catch(e){ console.warn(e); } }
+  function saveDensities(){
+    try {
+      localStorage.setItem(STORAGE_ING, JSON.stringify(densities));
+    } catch(e) { console.warn(e); }
+    // Whenever densities are saved, synchronize them to the unified catalog so other tools can read updated values
+    syncUnifiedFromDensities();
+  }
 
   function loadRows(){
     try {
@@ -824,6 +889,9 @@
     if (!tbody) return; // converter tab not on page? (defensive)
 
     densities = loadDensities();
+    // Merge unified ingredient densities into the local densities.  This picks up
+    // values from `ct_ingredients_v1` and ensures both sources are in sync.
+    syncDensitiesFromUnified();
     renderIngredientList();
     hydrateRows();
     updateSelects();

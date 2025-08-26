@@ -229,9 +229,10 @@
         -->
       <nav class="subnav" aria-label="Prep & Par navigation">
         <button class="nav-btn" data-view="dashboard" aria-selected="true">Dashboard</button>
+        <!-- Place Menu Items immediately after Dashboard for intuitive workflow -->
+        <button class="nav-btn" data-view="menuitems" aria-selected="false">Menu Items</button>
         <button class="nav-btn" data-view="items" aria-selected="false">Prep Items</button>
         <button class="nav-btn" data-view="recipes" aria-selected="false">Recipes</button>
-        <button class="nav-btn" data-view="menuitems" aria-selected="false">Menu Items</button>
         <button class="nav-btn" data-view="par" aria-selected="false">Par List</button>
         <button class="nav-btn" data-view="export" aria-selected="false">Export Worksheet</button>
         <button class="nav-btn" data-view="upload" aria-selected="false">Upload On‑Hand</button>
@@ -514,14 +515,530 @@
   </main>
 
   <footer class="app-footer">
-    <p>Data is saved locally in your browser. To start over, clear your local storage.</p>
+    <p>Data is saved locally in your browser. To start over, clear your local storage. <span class="version">v0.4.0</span></p>
   </footer>
 
   <script src="script.js"></script>
   <!-- Load Prep & Par logic after Chef Tools scripts -->
   <script src="app.js"></script>
-  <!-- Load Data Catalog script after prep & par logic so it can sync with the global state if available -->
-  <script src="catalog.js"></script>
+  <!-- Embed the Data Catalog logic inline.  This avoids reliance on an external catalog.js file
+       which some browsers may not load due to caching or cross‑origin restrictions.  The content
+       below is copied from catalog.js and wrapped in an IIFE. -->
+  <script>
+  /* Data Catalog Module for Chef Tools
+
+     This script implements a unified data management interface across the
+     Menu Planner, Ingredient Converter and Prep & Par tools.  It defines
+     shared objects (Ingredients, Prep Items, Recipes and Menu Items) and
+     provides UI for adding, editing and deleting entries.  Entries are
+     saved in browser localStorage using `ct_*` keys.  Changes to Prep
+     Items and Recipes are optionally synchronized with the Prep & Par
+     state if it is available on the global `window.state`.
+
+     The catalog UI lives inside the `<section id="tab-catalog">` in
+     index.html.  A subnavigation bar lets users switch between object
+     types.  Each object type has its own table and controls.  The
+     script does not require any build step and runs in modern browsers.
+  */
+  (function() {
+    // Storage keys for unified objects
+    const STORE_KEYS = {
+      ingredients: 'ct_ingredients_v1',
+      prepItems: 'ct_prepItems_v1',
+      recipes: 'ct_recipes_v1',
+      menuItems: 'ct_menuItems_v1'
+    };
+    // Load a category from localStorage, falling back to provided default
+    function loadCategory(cat, fallback) {
+      const key = STORE_KEYS[cat];
+      try {
+        const raw = localStorage.getItem(key);
+        return raw ? JSON.parse(raw) : fallback;
+      } catch (e) {
+        console.warn('Failed to load category', cat, e);
+        return fallback;
+      }
+    }
+    // Save a category back to localStorage
+    function saveCategory(cat) {
+      const key = STORE_KEYS[cat];
+      localStorage.setItem(key, JSON.stringify(data[cat]));
+      // If the ingredients category was saved, also sync densities to the legacy
+      // converter key so that Ingredient Converter sees updated values.  This
+      // maps unified ingredient objects (name, density) into a simple object
+      // keyed by name -> density and stores it under 'chef_ing_densities_v1'.
+      if (cat === 'ingredients') {
+        syncIngredientDensities();
+      }
+    }
+    // Global data store
+    const data = {
+      ingredients: loadCategory('ingredients', []),
+      prepItems: loadCategory('prepItems', []),
+      recipes: loadCategory('recipes', []),
+      menuItems: loadCategory('menuItems', [])
+    };
+    /*
+      Sync ingredient densities to the legacy converter key.  The Ingredient
+      Converter reads densities from `chef_ing_densities_v1` in localStorage.
+      Whenever the unified ingredients are saved or modified, call this to
+      update that key.  It constructs a simple object of {name: density}.
+    */
+    function syncIngredientDensities() {
+      try {
+        const out = {};
+        data.ingredients.forEach(ing => {
+          if (ing && typeof ing.name === 'string' && ing.density != null) {
+            out[ing.name] = ing.density;
+          }
+        });
+        localStorage.setItem('chef_ing_densities_v1', JSON.stringify(out));
+      } catch (err) {
+        console.warn('Failed to sync ingredient densities to converter', err);
+      }
+    }
+    // DOM references
+    const tab = document.getElementById('tab-catalog');
+    if (!tab) return; // Catalog tab might not exist
+    const navButtons = Array.from(tab.querySelectorAll('.catalog-btn'));
+    const sections = {
+      ingredients: document.getElementById('catalog-ingredients'),
+      prepItems: document.getElementById('catalog-prepItems'),
+      recipes: document.getElementById('catalog-recipes'),
+      menuItems: document.getElementById('catalog-menuItems')
+    };
+    // Activate category handler
+    function activateCategory(cat) {
+      navButtons.forEach(btn => {
+        const selected = btn.dataset.category === cat;
+        btn.classList.toggle('active', selected);
+        btn.setAttribute('aria-selected', String(selected));
+      });
+      Object.keys(sections).forEach(key => {
+        const section = sections[key];
+        if (!section) return;
+        section.hidden = key !== cat;
+      });
+      renderCategory(cat);
+    }
+    navButtons.forEach(btn => {
+      btn.addEventListener('click', () => {
+        activateCategory(btn.dataset.category);
+      });
+    });
+    // Render category
+    function renderCategory(cat) {
+      if (cat === 'ingredients') return renderIngredients();
+      if (cat === 'prepItems') return renderPrepItems();
+      if (cat === 'recipes') return renderRecipes();
+      if (cat === 'menuItems') return renderMenuItems();
+    }
+    /* ------------------ Ingredients ------------------ */
+    function renderIngredients() {
+      const container = sections.ingredients;
+      if (!container) return;
+      container.innerHTML = '';
+      // Toolbar
+      const toolbar = document.createElement('div');
+      toolbar.className = 'toolbar';
+      const addBtn = document.createElement('button');
+      addBtn.textContent = 'Add Ingredient';
+      addBtn.className = 'primary';
+      addBtn.onclick = () => {
+        data.ingredients.push({ name: '', density: null, price: null });
+        saveCategory('ingredients');
+        renderIngredients();
+      };
+      const exportBtn = document.createElement('button');
+      exportBtn.textContent = 'Export JSON';
+      exportBtn.className = 'secondary';
+      exportBtn.onclick = () => {
+        const json = JSON.stringify(data.ingredients, null, 2);
+        downloadFile('ingredients.json', 'application/json', json);
+      };
+      const importLabel = document.createElement('label');
+      importLabel.className = 'filelike';
+      importLabel.textContent = 'Import JSON';
+      const importInput = document.createElement('input');
+      importInput.type = 'file';
+      importInput.accept = 'application/json';
+      importInput.onchange = async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        const txt = await file.text();
+        try {
+          data.ingredients = JSON.parse(txt);
+        } catch (err) {
+          alert('Failed to parse JSON');
+          return;
+        }
+        saveCategory('ingredients');
+        renderIngredients();
+      };
+      importLabel.appendChild(importInput);
+      toolbar.appendChild(addBtn);
+      toolbar.appendChild(exportBtn);
+      toolbar.appendChild(importLabel);
+      container.appendChild(toolbar);
+      // Table
+      const table = document.createElement('table');
+      table.className = 'table';
+      table.innerHTML = '<thead><tr><th>Name</th><th>g per cup</th><th>Price per Unit</th><th></th></tr></thead>';
+      const tbody = document.createElement('tbody');
+      data.ingredients.forEach((ing, idx) => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td><input type="text" data-k="name" value="${ing.name || ''}"></td>
+          <td><input type="number" min="0" step="any" data-k="density" value="${ing.density ?? ''}"></td>
+          <td><input type="number" min="0" step="any" data-k="price" value="${ing.price ?? ''}"></td>
+          <td><button data-act="del" class="secondary">Delete</button></td>
+        `;
+        tr.oninput = (ev) => {
+          const el = ev.target;
+          const k = el.dataset.k;
+          if (!k) return;
+          if (k === 'name') ing.name = el.value;
+          else if (k === 'density') ing.density = el.value === '' ? null : Number(el.value);
+          else if (k === 'price') ing.price = el.value === '' ? null : Number(el.value);
+          saveCategory('ingredients');
+        };
+        tr.querySelector('button[data-act="del"]').onclick = () => {
+          data.ingredients.splice(idx, 1);
+          saveCategory('ingredients');
+          renderIngredients();
+        };
+        tbody.appendChild(tr);
+      });
+      table.appendChild(tbody);
+      container.appendChild(table);
+    }
+    /* ------------------ Prep Items ------------------ */
+    function renderPrepItems() {
+      const container = sections.prepItems;
+      if (!container) return;
+      container.innerHTML = '';
+      const toolbar = document.createElement('div');
+      toolbar.className = 'toolbar';
+      const addBtn = document.createElement('button');
+      addBtn.textContent = 'Add Prep Item';
+      addBtn.className = 'primary';
+      addBtn.onclick = () => {
+        const id = `prep_${Date.now()}`;
+        data.prepItems.push({ id: id, name: '', type: 'recipe', unit: '', unitCount: 1, station: '', locations: [], notes: '' });
+        saveCategory('prepItems');
+        // Synchronize with prep & par items if state is available
+        if (typeof window.state !== 'undefined' && window.state.items) {
+          window.state.items.push({ id: id, name: '', type: 'recipe', unit: '', station: '', locations: [], default_batch_yield: null, notes: '' });
+          if (typeof window.persistAll === 'function') window.persistAll();
+        }
+        renderPrepItems();
+      };
+      const exportBtn = document.createElement('button');
+      exportBtn.textContent = 'Export JSON';
+      exportBtn.className = 'secondary';
+      exportBtn.onclick = () => {
+        downloadFile('prepItems.json', 'application/json', JSON.stringify(data.prepItems, null, 2));
+      };
+      const importLabel = document.createElement('label');
+      importLabel.className = 'filelike';
+      importLabel.textContent = 'Import JSON';
+      const importInput = document.createElement('input');
+      importInput.type = 'file';
+      importInput.accept = 'application/json';
+      importInput.onchange = async (e) => {
+        const f = e.target.files[0];
+        if (!f) return;
+        const txt = await f.text();
+        try {
+          data.prepItems = JSON.parse(txt);
+        } catch (err) {
+          alert('Failed to parse JSON');
+          return;
+        }
+        saveCategory('prepItems');
+        // Replace prep & par items
+        if (typeof window.state !== 'undefined' && window.state.items) {
+          window.state.items = data.prepItems.map(it => {
+            return {
+              id: it.id,
+              name: it.name,
+              type: it.type,
+              unit: it.unit,
+              station: it.station,
+              locations: it.locations || [],
+              default_batch_yield: it.type === 'recipe' ? (it.unitCount || null) : null,
+              notes: it.notes || ''
+            };
+          });
+          if (typeof window.persistAll === 'function') window.persistAll();
+        }
+        renderPrepItems();
+      };
+      importLabel.appendChild(importInput);
+      toolbar.appendChild(addBtn);
+      toolbar.appendChild(exportBtn);
+      toolbar.appendChild(importLabel);
+      container.appendChild(toolbar);
+      const table = document.createElement('table');
+      table.className = 'table';
+      table.innerHTML = '<thead><tr><th>Name</th><th>Type</th><th>Unit</th><th>Unit Count</th><th>Station</th><th>Locations</th><th>Notes</th><th></th></tr></thead>';
+      const tbody = document.createElement('tbody');
+      data.prepItems.forEach((it, idx) => {
+        if (it.unitCount === undefined) it.unitCount = 1;
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td><input type="text" data-k="name" value="${it.name || ''}"></td>
+          <td><select data-k="type">
+              <option value="recipe" ${it.type === 'recipe' ? 'selected' : ''}>recipe</option>
+              <option value="mechanical" ${it.type === 'mechanical' ? 'selected' : ''}>mechanical</option>
+          </select></td>
+          <td><input type="text" data-k="unit" value="${it.unit || ''}"></td>
+          <td><input type="number" min="1" step="1" data-k="unitCount" value="${it.unitCount ?? 1}"></td>
+          <td><input type="text" data-k="station" value="${it.station || ''}"></td>
+          <td><input type="text" data-k="locations" value="${(it.locations || []).join(', ')}"></td>
+          <td><input type="text" data-k="notes" value="${it.notes || ''}"></td>
+          <td><button data-act="del" class="secondary">Delete</button></td>
+        `;
+        tr.oninput = (ev) => {
+          const el = ev.target;
+          const k = el.dataset.k;
+          if (!k) return;
+          if (k === 'locations') it.locations = el.value.split(',').map(s => s.trim()).filter(Boolean);
+          else if (k === 'unitCount') it.unitCount = Number(el.value) || 1;
+          else it[k] = el.value;
+          saveCategory('prepItems');
+          // sync change to prep & par items
+          if (typeof window.state !== 'undefined' && window.state.items) {
+            const item = window.state.items.find(x => x.id === it.id);
+            if (item) {
+              item.name = it.name;
+              item.type = it.type;
+              item.unit = it.unit;
+              item.station = it.station;
+              item.locations = it.locations;
+              item.notes = it.notes;
+              if (it.type === 'recipe') item.default_batch_yield = it.unitCount;
+              if (typeof window.persistAll === 'function') window.persistAll();
+            }
+          }
+        };
+        tr.querySelector('button[data-act="del"]').onclick = () => {
+          data.prepItems.splice(idx, 1);
+          saveCategory('prepItems');
+          if (typeof window.state !== 'undefined' && window.state.items) {
+            window.state.items = window.state.items.filter(x => x.id !== it.id);
+            if (typeof window.persistAll === 'function') window.persistAll();
+          }
+          renderPrepItems();
+        };
+        tbody.appendChild(tr);
+      });
+      table.appendChild(tbody);
+      container.appendChild(table);
+    }
+    /* ------------------ Recipes ------------------ */
+    function renderRecipes() {
+      const container = sections.recipes;
+      if (!container) return;
+      container.innerHTML = '';
+      const toolbar = document.createElement('div');
+      toolbar.className = 'toolbar';
+      const addBtn = document.createElement('button');
+      addBtn.textContent = 'Add Recipe';
+      addBtn.className = 'primary';
+      addBtn.onclick = () => {
+        const newId = `recipe_${Date.now()}`;
+        const firstPrep = data.prepItems[0];
+        data.recipes.push({ id: newId, prepItemId: firstPrep ? firstPrep.id : '', yieldAmount: null, yieldUnit: '', ingredients: [], instructions: '' });
+        saveCategory('recipes');
+        syncRecipeYields();
+        renderRecipes();
+      };
+      const exportBtn = document.createElement('button');
+      exportBtn.textContent = 'Export JSON';
+      exportBtn.className = 'secondary';
+      exportBtn.onclick = () => {
+        downloadFile('recipes.json', 'application/json', JSON.stringify(data.recipes, null, 2));
+      };
+      const importLabel = document.createElement('label');
+      importLabel.className = 'filelike';
+      importLabel.textContent = 'Import JSON';
+      const importInput = document.createElement('input');
+      importInput.type = 'file';
+      importInput.accept = 'application/json';
+      importInput.onchange = async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        const txt = await file.text();
+        try {
+          data.recipes = JSON.parse(txt);
+        } catch (err) {
+          alert('Failed to parse JSON');
+          return;
+        }
+        saveCategory('recipes');
+        syncRecipeYields();
+        renderRecipes();
+      };
+      importLabel.appendChild(importInput);
+      toolbar.appendChild(addBtn);
+      toolbar.appendChild(exportBtn);
+      toolbar.appendChild(importLabel);
+      container.appendChild(toolbar);
+      const table = document.createElement('table');
+      table.className = 'table';
+      table.innerHTML = '<thead><tr><th>Prep Item</th><th>Yield Amount</th><th>Yield Unit</th><th>Ingredients (amount unit name)</th><th>Instructions</th><th></th></tr></thead>';
+      const tbody = document.createElement('tbody');
+      data.recipes.forEach((rec, idx) => {
+        const tr = document.createElement('tr');
+        const ingStr = (rec.ingredients || []).map(i => `${i.amount} ${i.unit} ${i.name}`).join(' | ');
+        tr.innerHTML = `
+          <td><select data-k="prepItemId">
+            ${data.prepItems.map(pi => `<option value="${pi.id}" ${rec.prepItemId === pi.id ? 'selected' : ''}>${pi.name || pi.id}</option>`).join('')}
+          </select></td>
+          <td><input type="number" min="0" data-k="yieldAmount" value="${rec.yieldAmount ?? ''}"></td>
+          <td><input data-k="yieldUnit" value="${rec.yieldUnit || ''}"></td>
+          <td><textarea data-k="ingredients">${ingStr}</textarea></td>
+          <td><textarea data-k="instructions">${rec.instructions || ''}</textarea></td>
+          <td><button data-act="del" class="secondary">Delete</button></td>
+        `;
+        tr.oninput = (ev) => {
+          const el = ev.target;
+          const k = el.dataset.k;
+          if (!k) return;
+          if (k === 'ingredients') {
+            rec.ingredients = el.value.split('|').map(s => s.trim()).filter(Boolean).map(seg => {
+              const parts = seg.split(/\s+/);
+              const amt = Number(parts.shift());
+              const u = parts.shift() || '';
+              const nm = parts.join(' ');
+              return { amount: amt, unit: u, name: nm };
+            });
+          } else if (k === 'yieldAmount') {
+            rec.yieldAmount = el.value === '' ? null : Number(el.value);
+          } else {
+            rec[k] = el.value;
+          }
+          saveCategory('recipes');
+          syncRecipeYields();
+        };
+        tr.querySelector('button[data-act="del"]').onclick = () => {
+          data.recipes.splice(idx, 1);
+          saveCategory('recipes');
+          syncRecipeYields();
+          renderRecipes();
+        };
+        tbody.appendChild(tr);
+      });
+      table.appendChild(tbody);
+      container.appendChild(table);
+    }
+    // Synchronize recipe yields to prep items and to state
+    function syncRecipeYields() {
+      data.recipes.forEach(rec => {
+        const pi = data.prepItems.find(pi => pi.id === rec.prepItemId);
+        if (pi && rec.yieldAmount != null) {
+          pi.unitCount = rec.yieldAmount;
+        }
+      });
+      saveCategory('prepItems');
+      if (typeof window.state !== 'undefined' && window.state.items) {
+        data.prepItems.forEach(pi => {
+          const itm = window.state.items.find(x => x.id === pi.id);
+          if (itm) itm.default_batch_yield = pi.unitCount || null;
+        });
+        if (typeof window.persistAll === 'function') window.persistAll();
+      }
+    }
+    /* ------------------ Menu Items ------------------ */
+    function renderMenuItems() {
+      const container = sections.menuItems;
+      if (!container) return;
+      container.innerHTML = '';
+      const toolbar = document.createElement('div');
+      toolbar.className = 'toolbar';
+      const addBtn = document.createElement('button');
+      addBtn.textContent = 'Add Menu Item';
+      addBtn.className = 'primary';
+      addBtn.onclick = () => {
+        data.menuItems.push({ id: `menu_${Date.now()}`, name: '', description: '', components: [] });
+        saveCategory('menuItems');
+        renderMenuItems();
+      };
+      const exportBtn = document.createElement('button');
+      exportBtn.textContent = 'Export JSON';
+      exportBtn.className = 'secondary';
+      exportBtn.onclick = () => {
+        downloadFile('menuItems.json', 'application/json', JSON.stringify(data.menuItems, null, 2));
+      };
+      const importLabel = document.createElement('label');
+      importLabel.className = 'filelike';
+      importLabel.textContent = 'Import JSON';
+      const importInput = document.createElement('input');
+      importInput.type = 'file';
+      importInput.accept = 'application/json';
+      importInput.onchange = async (e) => {
+        const f = e.target.files[0];
+        if (!f) return;
+        const txt = await f.text();
+        try {
+          data.menuItems = JSON.parse(txt);
+        } catch (err) {
+          alert('Failed to parse JSON');
+          return;
+        }
+        saveCategory('menuItems');
+        renderMenuItems();
+      };
+      importLabel.appendChild(importInput);
+      toolbar.appendChild(addBtn);
+      toolbar.appendChild(exportBtn);
+      toolbar.appendChild(importLabel);
+      container.appendChild(toolbar);
+      const table = document.createElement('table');
+      table.className = 'table';
+      table.innerHTML = '<thead><tr><th>Name</th><th>Description</th><th>Components</th><th></th></tr></thead>';
+      const tbody = document.createElement('tbody');
+      data.menuItems.forEach((mi, idx) => {
+        const tr = document.createElement('tr');
+        const compsStr = mi.components.map(c => `${c.qty} ${c.unit} ${c.name}`).join(' | ');
+        tr.innerHTML = `
+          <td><input type="text" data-k="name" value="${mi.name || ''}"></td>
+          <td><input type="text" data-k="description" value="${mi.description || ''}"></td>
+          <td><textarea data-k="components">${compsStr}</textarea></td>
+          <td><button data-act="del" class="secondary">Delete</button></td>
+        `;
+        tr.oninput = (ev) => {
+          const el = ev.target;
+          const k = el.dataset.k;
+          if (!k) return;
+          if (k === 'components') {
+            mi.components = el.value.split('|').map(s => s.trim()).filter(Boolean).map(seg => {
+              const parts = seg.split(/\s+/);
+              const qty = Number(parts.shift());
+              const unit = parts.shift() || '';
+              const nm = parts.join(' ');
+              return { qty: qty, unit: unit, name: nm };
+            });
+          } else {
+            mi[k] = el.value;
+          }
+          saveCategory('menuItems');
+        };
+        tr.querySelector('button[data-act="del"]').onclick = () => {
+          data.menuItems.splice(idx, 1);
+          saveCategory('menuItems');
+          renderMenuItems();
+        };
+        tbody.appendChild(tr);
+      });
+      table.appendChild(tbody);
+      container.appendChild(table);
+    }
+    // Initialize with the first category active
+    activateCategory('ingredients');
+  })();
+  </script>
   <!-- ExcelJS library for generating XLSX files with formatting -->
   <script src="https://cdn.jsdelivr.net/npm/exceljs@4.3.0/dist/exceljs.min.js"></script>
   <script>

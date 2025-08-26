@@ -200,6 +200,12 @@ input#expected-seats {
 
 .app-footer p { margin: 0; text-align: center; }
 
+/* Version number styling inside footer */
+.app-footer .version {
+  font-weight: bold;
+  margin-left: 8px;
+}
+
 /* --------- Converter styles (rebased to brand) --------- */
 .card { background: var(--card); border-radius: 12px; padding: 16px; box-shadow: 0 6px 20px rgba(20,20,30,0.04); }
 .controls { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 12px; }
