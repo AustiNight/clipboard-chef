@@ -1,4 +1,4 @@
-Chef Tools License Agreement
+Chef Tools License Agreement 
 
 Copyright © [2025] Jonathan H. Aulson. All rights reserved.
 
