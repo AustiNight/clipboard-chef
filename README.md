@@ -1,4 +1,4 @@
-# Chef Tools Suite
+# Tools for a Professional Chef (software by her fiancé)
 
 **Chef Tools** is a browser-based Progressive Web App (PWA) for chefs, caterers, and kitchen managers. It combines three tools into one interface:
 
