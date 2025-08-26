@@ -42,18 +42,18 @@
     <section id="tab-menu" class="tab-content active" role="tabpanel" aria-labelledby="tabbtn-menu">
       <h2>Menu Planner</h2>
       <p class="intro">
-        Build a menu, assign ingredients with per-dish amounts and units, set your expected diners,
+        Build a menu, assign ingredients with per-menu-item amounts and units, set your expected diners,
         then generate a shopping list with pricing. Your ingredient catalog & recipes are saved locally.
       </p>
 
       <!-- Menu Section -->
       <section id="menu-section">
-        <h3>Menu</h3>
-        <p>Enter the dishes for your event. Each dish has a name and optional description.</p>
+        <h3>Menu Items</h3>
+        <p>Enter the menu items for your event. Each menu item has a name and optional description.</p>
         <table id="menu-table">
           <thead>
             <tr>
-              <th>Dish Name</th>
+              <th>Menu Item Name</th>
               <th>Description</th>
               <th></th>
             </tr>
@@ -62,17 +62,17 @@
             <!-- rows injected -->
           </tbody>
         </table>
-        <button id="add-dish-btn" class="add-btn">Add Dish</button>
+        <button id="add-dish-btn" class="add-btn">Add Menu Item</button>
       </section>
 
       <!-- Ingredients Section -->
       <section id="ingredients-section">
         <h3>Ingredients</h3>
-        <p>Assign ingredients to each dish along with the amount needed per dish and its unit.</p>
+        <p>Assign ingredients to each menu item along with the amount needed per menu item and its unit.</p>
         <table id="ingredients-table">
           <thead>
             <tr>
-              <th>Dish</th>
+              <th>Menu Item</th>
               <th>Ingredient</th>
               <th>Amount</th>
               <th>Unit</th>
@@ -515,7 +515,7 @@
   </main>
 
   <footer class="app-footer">
-    <p>Data is saved locally in your browser. To start over, clear your local storage. <span class="version">v0.4.0</span></p>
+    <p>Data is saved locally in your browser. To start over, clear your local storage. <span class="version">v0.5.0</span></p>
   </footer>
 
   <script src="script.js"></script>
@@ -559,7 +559,12 @@
         return fallback;
       }
     }
-    // Save a category back to localStorage
+    // Save a category back to localStorage.  Also notify other
+    // modules (Menu Planner, Prep & Par) to reload unified data if
+    // appropriate.  Ingredients saving triggers density sync to the
+    // Ingredient Converter.  Menu items saving triggers a reload of
+    // unified catalog into the Menu Planner so that newly created or
+    // updated menu items appear across all tools.
     function saveCategory(cat) {
       const key = STORE_KEYS[cat];
       localStorage.setItem(key, JSON.stringify(data[cat]));
@@ -569,6 +574,30 @@
       // keyed by name -> density and stores it under 'chef_ing_densities_v1'.
       if (cat === 'ingredients') {
         syncIngredientDensities();
+      }
+      // Notify the Menu Planner and other tools to reload unified data
+      // whenever ingredients or menu items are saved.  This ensures a
+      // cohesive data model across the toolset.  The global function
+      // `menuPlannerSyncFromUnifiedCatalog` is defined in script.js.
+      if (cat === 'ingredients' || cat === 'menuItems') {
+        if (typeof window.menuPlannerSyncFromUnifiedCatalog === 'function') {
+          window.menuPlannerSyncFromUnifiedCatalog();
+        }
+      }
+      // Refresh Prep & Par views if currently displaying menu items or
+      // par lists.  This allows any changes to unified menu items to
+      // propagate immediately.  The `currentView` and `routeTo` are
+      // defined in app.js.  We check existence defensively.
+      if (cat === 'menuItems') {
+        try {
+          if (typeof window.currentView !== 'undefined' && typeof window.routeTo === 'function') {
+            if (window.currentView === 'menuitems' || window.currentView === 'par') {
+              window.routeTo(window.currentView);
+            }
+          }
+        } catch (err) {
+          // ignore if not available
+        }
       }
     }
     // Global data store

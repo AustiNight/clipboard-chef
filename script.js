@@ -113,6 +113,8 @@
       seedSampleData();
     }
     expectedSeatsInput.value = expectedSeats;
+    // After loading menu planner data, merge unified menu items and ingredients.
+    loadUnifiedCatalogIntoMenuPlanner();
   }
   function seedSampleData() {
     menuList = [
@@ -140,6 +142,193 @@
     localStorage.setItem('mp_ingredientList', JSON.stringify(ingredientList));
     localStorage.setItem('mp_ingredientCatalog', JSON.stringify(ingredientCatalog));
     localStorage.setItem('mp_expectedSeats', String(expectedSeats));
+    // Synchronize menu planner data to the unified catalog so other tools stay in sync
+    syncUnifiedCatalogFromMenuPlanner();
+  }
+
+  // Expose a function on the global object to force a reload of unified catalog
+  // data into the Menu Planner.  This is useful when other parts of the
+  // application (e.g., Data Catalog or Prep & Par) modify the unified
+  // catalog.  Calling this will merge unified menu items and ingredient
+  // prices into the menu planner, re-render the UI and persist the changes
+  // back to both the menu planner's own keys and unified keys.  See
+  // catalog.js for calls to this function after saving unified data.
+  window.menuPlannerSyncFromUnifiedCatalog = function() {
+    try {
+      // Merge any new unified ingredients and menu items into the local
+      // state.  Note: this does not override existing entries but will
+      // append missing ones and merge price data.
+      loadUnifiedCatalogIntoMenuPlanner();
+      // Re-render tables to reflect any newly merged data
+      renderMenuTable();
+      renderIngredientsTable();
+      renderCatalogTable();
+      // Persist state and re-synchronize back to unified storage
+      saveData();
+    } catch (err) {
+      console.warn('menuPlannerSyncFromUnifiedCatalog failed', err);
+    }
+  };
+
+  /**
+   * Load unified catalog (ingredients and menu items) into the menu planner state.
+   * Merges ingredient prices and menu items from the unified store but does not override existing entries.
+   * This is called after loading local data.  It updates the ingredient catalog with unified price data
+   * and adds any unified menu items (and their components) that are not already present in the menu planner.
+   */
+  function loadUnifiedCatalogIntoMenuPlanner() {
+    try {
+      // Merge unified ingredients into ingredientCatalog (price data)
+      const rawIng = localStorage.getItem('ct_ingredients_v1');
+      if (rawIng) {
+        const arr = JSON.parse(rawIng) || [];
+        arr.forEach(item => {
+          const name = item.name;
+          if (!name) return;
+          // Merge price into ingredientCatalog.  Accept both objects and numbers.
+          if (item.price != null) {
+            if (!ingredientCatalog[name]) ingredientCatalog[name] = {};
+            if (typeof item.price === 'object') {
+              Object.keys(item.price).forEach(unit => {
+                if (ingredientCatalog[name][unit] === undefined) {
+                  ingredientCatalog[name][unit] = item.price[unit];
+                }
+              });
+            } else if (typeof item.price === 'number') {
+              // Use a default key 'unit' when price is a number
+              if (ingredientCatalog[name]['unit'] === undefined) {
+                ingredientCatalog[name]['unit'] = item.price;
+              }
+            }
+          }
+        });
+      }
+      // Merge unified menu items into the local menuList and ingredientList
+      const rawMenu = localStorage.getItem('ct_menuItems_v1');
+      if (rawMenu) {
+        const menuArr = JSON.parse(rawMenu) || [];
+        menuArr.forEach(item => {
+          if (!item || !item.name) return;
+          // If not already present in menuList, add it
+          const existing = menuList.find(m => m.name === item.name);
+          if (!existing) {
+            menuList.push({ name: item.name, description: item.description || '' });
+            // Also add ingredients/components to ingredientList
+            if (Array.isArray(item.components)) {
+              item.components.forEach(comp => {
+                if (comp && comp.ingredientName) {
+                  ingredientList.push({
+                    dish: item.name,
+                    ingredient: comp.ingredientName,
+                    amount: comp.amount != null ? comp.amount : '',
+                    unit: comp.unit || ALL_UNITS[0]
+                  });
+                }
+              });
+            }
+          }
+        });
+      }
+    } catch (err) {
+      console.warn('Failed to merge unified catalog into menu planner', err);
+    }
+  }
+
+  /**
+   * Synchronize menu planner state (menu items and ingredient catalog) into the unified catalog.
+   * This writes to ct_menuItems_v1 and ct_ingredients_v1 so other tools can read consistent data.
+   */
+  function syncUnifiedCatalogFromMenuPlanner() {
+    try {
+      // Sync ingredients: build a map keyed by name from existing unified data
+      let unifiedIng = {};
+      const rawIng = localStorage.getItem('ct_ingredients_v1');
+      if (rawIng) {
+        try {
+          const arr = JSON.parse(rawIng) || [];
+          arr.forEach(it => {
+            if (it && it.name) {
+              // Normalize price: ensure price is an object mapping unit→price.  If it
+              // comes in as a number or other type, wrap it in an object with a
+              // default unit key.  This prevents downstream code from failing.
+              let priceObj = {};
+              if (typeof it.price === 'number') {
+                priceObj = { unit: it.price };
+              } else if (it.price && typeof it.price === 'object') {
+                priceObj = Object.assign({}, it.price);
+              }
+              unifiedIng[it.name] = { name: it.name, density: it.density ?? null, price: priceObj };
+            }
+          });
+        } catch (_) {
+          unifiedIng = {};
+        }
+      }
+      // Update from ingredientCatalog (prices keyed by unit).  Each entry in
+      // ingredientCatalog is of the form { [unit]: price }.  Ensure that for
+      // each unit we merge the price.  Create unified entry if missing.
+      Object.keys(ingredientCatalog).forEach(name => {
+        const prices = ingredientCatalog[name];
+        if (!unifiedIng[name]) {
+          unifiedIng[name] = { name: name, density: null, price: {} };
+        }
+        if (prices && typeof prices === 'object') {
+          if (!unifiedIng[name].price || typeof unifiedIng[name].price !== 'object') unifiedIng[name].price = {};
+          Object.keys(prices).forEach(unit => {
+            unifiedIng[name].price[unit] = prices[unit];
+          });
+        } else if (typeof prices === 'number') {
+          // In case price is just a number (without units), store under default 'unit'
+          unifiedIng[name].price['unit'] = prices;
+        }
+      });
+      // Ensure any ingredient strings in ingredientList exist in unified ingredients
+      ingredientList.forEach(item => {
+        const name = item.ingredient;
+        if (name && !unifiedIng[name]) {
+          unifiedIng[name] = { name: name, density: null, price: {} };
+        }
+      });
+      // Save unified ingredients back to storage
+      localStorage.setItem('ct_ingredients_v1', JSON.stringify(Object.values(unifiedIng)));
+
+      // Sync menu items: build map keyed by name from existing unified data
+      let unifiedMenu = {};
+      const rawMenu = localStorage.getItem('ct_menuItems_v1');
+      if (rawMenu) {
+        try {
+          const arr = JSON.parse(rawMenu) || [];
+          arr.forEach(it => { if (it && it.name) unifiedMenu[it.name] = it; });
+        } catch (_) { unifiedMenu = {}; }
+      }
+      // Update or create entries from menuList
+      menuList.forEach(dish => {
+        if (!dish || !dish.name) return;
+        let entry = unifiedMenu[dish.name];
+        if (!entry) {
+          entry = { id: `mi_${Date.now()}_${Math.random().toString(16).slice(2)}`, name: dish.name, description: dish.description || '', components: [] };
+          unifiedMenu[dish.name] = entry;
+        } else {
+          entry.description = dish.description || '';
+        }
+        // Build components for this menu item from ingredientList
+        const comps = [];
+        ingredientList.forEach(row => {
+          if (row.dish === dish.name && row.ingredient) {
+            comps.push({
+              ingredientName: row.ingredient,
+              amount: row.amount != null && row.amount !== '' ? Number(row.amount) : null,
+              unit: row.unit || ''
+            });
+          }
+        });
+        entry.components = comps;
+      });
+      // Save unified menu items
+      localStorage.setItem('ct_menuItems_v1', JSON.stringify(Object.values(unifiedMenu)));
+    } catch (err) {
+      console.warn('Failed to sync unified catalog from menu planner', err);
+    }
   }
 
   // Menu ops
@@ -161,7 +350,7 @@
       const tr = document.createElement('tr');
       // name
       const nameTd = document.createElement('td');
-      const nameInput = Object.assign(document.createElement('input'), { type: 'text', value: dish.name, placeholder: 'Dish Name' });
+      const nameInput = Object.assign(document.createElement('input'), { type: 'text', value: dish.name, placeholder: 'Menu Item Name' });
       nameInput.addEventListener('input', () => {
         const old = dish.name;
         dish.name = nameInput.value;
