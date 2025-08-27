@@ -86,12 +86,27 @@
   let expectedSeats = 1;
   let shoppingList = []; // derived
 
+  // Templates: holds saved sets of menu, ingredient lists and guest headcount
+  let templates = [];
+  // Custom units for weight and volume conversions
+  let customUnits = { weight: {}, volume: {} };
+
   // DOM
   const menuTableBody       = document.querySelector('#menu-table tbody');
   const ingredientsTableBody= document.querySelector('#ingredients-table tbody');
   const catalogTableBody    = document.querySelector('#catalog-table tbody');
   const shoppingTableBody   = document.querySelector('#shopping-table tbody');
   const expectedSeatsInput  = document.querySelector('#expected-seats');
+
+  // Search inputs for filtering tables
+  const menuSearchInput       = document.getElementById('menu-search');
+  const ingredientsSearchInput= document.getElementById('ingredients-search');
+
+  // Template UI elements
+  const tmplNameInput = document.getElementById('template-name');
+  const tmplSaveBtn   = document.getElementById('save-template-btn');
+  const tmplSelect    = document.getElementById('template-select');
+  const tmplLoadBtn   = document.getElementById('load-template-btn');
 
   // Data IO
   function loadData() {
@@ -113,6 +128,9 @@
       seedSampleData();
     }
     expectedSeatsInput.value = expectedSeats;
+    // Load saved templates and custom units
+    loadTemplates();
+    loadCustomUnits();
     // After loading menu planner data, merge unified menu items and ingredients.
     loadUnifiedCatalogIntoMenuPlanner();
   }
@@ -145,6 +163,206 @@
     // Synchronize menu planner data to the unified catalog so other tools stay in sync
     syncUnifiedCatalogFromMenuPlanner();
   }
+
+  /**
+   * Load templates from localStorage.  Templates are stored under 'mp_templates'
+   * as an array of objects with keys {name, menuList, ingredientList, expectedSeats}.
+   * After loading, update the template dropdown.
+   */
+  function loadTemplates() {
+    try {
+      const raw = localStorage.getItem('mp_templates');
+      templates = raw ? JSON.parse(raw) : [];
+    } catch (err) {
+      templates = [];
+    }
+    updateTemplateDropdown();
+  }
+
+  /**
+   * Persist current templates array to localStorage.
+   */
+  function saveTemplates() {
+    localStorage.setItem('mp_templates', JSON.stringify(templates));
+  }
+
+  /**
+   * Populate the template dropdown with saved templates.
+   */
+  function updateTemplateDropdown() {
+    if (!tmplSelect) return;
+    tmplSelect.innerHTML = '';
+    const placeholder = document.createElement('option');
+    placeholder.value = '';
+    placeholder.textContent = '-- Select template --';
+    tmplSelect.appendChild(placeholder);
+    templates.forEach(tmpl => {
+      const opt = document.createElement('option');
+      opt.value = tmpl.name;
+      opt.textContent = tmpl.name;
+      tmplSelect.appendChild(opt);
+    });
+  }
+
+  /**
+   * Save current state (menu list, ingredient list, expected seats) as a template.
+   */
+  function saveTemplate() {
+    if (!tmplNameInput) return;
+    const name = tmplNameInput.value.trim();
+    if (!name) {
+      alert('Please enter a template name');
+      return;
+    }
+    const templateData = {
+      name: name,
+      menuList: JSON.parse(JSON.stringify(menuList)),
+      ingredientList: JSON.parse(JSON.stringify(ingredientList)),
+      expectedSeats: expectedSeats
+    };
+    const existing = templates.find(t => t.name === name);
+    if (existing) {
+      Object.assign(existing, templateData);
+    } else {
+      templates.push(templateData);
+    }
+    saveTemplates();
+    updateTemplateDropdown();
+    alert('Template saved');
+  }
+
+  /**
+   * Load selected template into the menu planner state and re-render.
+   */
+  function loadTemplate() {
+    if (!tmplSelect) return;
+    const name = tmplSelect.value;
+    if (!name) {
+      alert('Please select a template');
+      return;
+    }
+    const tmpl = templates.find(t => t.name === name);
+    if (!tmpl) {
+      alert('Template not found');
+      return;
+    }
+    menuList = JSON.parse(JSON.stringify(tmpl.menuList));
+    ingredientList = JSON.parse(JSON.stringify(tmpl.ingredientList));
+    expectedSeats = tmpl.expectedSeats || 1;
+    expectedSeatsInput.value = expectedSeats;
+    renderMenuTable();
+    renderIngredientsTable();
+    renderCatalogTable();
+    saveData();
+    alert('Template loaded');
+  }
+
+  /**
+   * Load custom unit definitions from localStorage and merge them into weight and volume unit maps.
+   */
+  function loadCustomUnits() {
+    try {
+      const raw = localStorage.getItem('mp_customUnits');
+      customUnits = raw ? JSON.parse(raw) : { weight: {}, volume: {} };
+    } catch (err) {
+      customUnits = { weight: {}, volume: {} };
+    }
+    // Merge custom units into unit maps
+    Object.entries(customUnits.weight).forEach(([u, factor]) => {
+      WEIGHT_UNIT_GRAMS[u] = factor;
+    });
+    Object.entries(customUnits.volume).forEach(([u, factor]) => {
+      VOLUME_UNIT_ML[u] = factor;
+    });
+    // Rebuild ALL_UNITS including weight, volume and unconvertible units
+    const unitsSet = new Set([...Object.keys(WEIGHT_UNIT_GRAMS), ...Object.keys(VOLUME_UNIT_ML), ...UNCONVERTIBLE_UNITS]);
+    ALL_UNITS.length = 0;
+    unitsSet.forEach(u => ALL_UNITS.push(u));
+  }
+
+  /**
+   * Save custom units to localStorage and update unit maps.
+   */
+  function saveCustomUnits() {
+    localStorage.setItem('mp_customUnits', JSON.stringify(customUnits));
+    // After saving, reload to apply changes
+    loadCustomUnits();
+  }
+
+  /**
+   * Filter the Menu Items table based on the search input value.
+   */
+  function filterMenuTable() {
+    const query = (menuSearchInput?.value || '').toLowerCase();
+    const rows = menuTableBody.querySelectorAll('tr');
+    rows.forEach(row => {
+      const nameInput = row.querySelector('td:nth-child(1) input');
+      const descInput = row.querySelector('td:nth-child(2) input');
+      const text = `${nameInput?.value || ''} ${descInput?.value || ''}`.toLowerCase();
+      row.style.display = query && !text.includes(query) ? 'none' : '';
+    });
+  }
+
+  /**
+   * Filter the Ingredients assignment table based on search input.
+   */
+  function filterIngredientsTable() {
+    const query = (ingredientsSearchInput?.value || '').toLowerCase();
+    const rows = ingredientsTableBody.querySelectorAll('tr');
+    rows.forEach(row => {
+      const dishInput = row.querySelector('td:nth-child(1) select, td:nth-child(1) input');
+      const ingInput  = row.querySelector('td:nth-child(2) select, td:nth-child(2) input');
+      const dishVal = dishInput?.value || dishInput?.textContent || '';
+      const ingVal  = ingInput?.value || ingInput?.textContent || '';
+      const text = `${dishVal} ${ingVal}`.toLowerCase();
+      row.style.display = query && !text.includes(query) ? 'none' : '';
+    });
+  }
+
+  /**
+   * Display context-aware tips for the Menu Items list.  Shows messages if
+   * descriptions are missing or if there are no menu items defined.
+   */
+  function updateMenuTips() {
+    const section = document.querySelector('#menu-section');
+    if (!section) return;
+    let tipsEl = section.querySelector('.tips');
+    if (!tipsEl) {
+      tipsEl = document.createElement('div');
+      tipsEl.className = 'tips';
+      section.appendChild(tipsEl);
+    }
+    const missingDesc = menuList.some(item => !item.description?.trim());
+    const emptyMenu  = menuList.length === 0;
+    let messages = [];
+    if (emptyMenu) messages.push('No menu items defined yet.');
+    if (missingDesc) messages.push('Some menu items are missing descriptions.');
+    tipsEl.textContent = messages.join(' ') || '';
+  }
+
+  /**
+   * Display context-aware tips for the ingredient assignment list.  Shows messages
+   * if any ingredients are missing or if there are menu items without ingredients.
+   */
+  function updateIngredientTips() {
+    const section = document.querySelector('#ingredients-section');
+    if (!section) return;
+    let tipsEl = section.querySelector('.tips');
+    if (!tipsEl) {
+      tipsEl = document.createElement('div');
+      tipsEl.className = 'tips';
+      section.appendChild(tipsEl);
+    }
+    // Check for ingredient rows missing dish or ingredient
+    const missingField = ingredientList.some(ing => !ing.dish || !ing.ingredient);
+    // Check for menu items without assigned ingredients
+    const menuWithoutIng = menuList.some(item => !ingredientList.some(ing => ing.dish === item.name));
+    let messages = [];
+    if (missingField) messages.push('Some ingredient rows are incomplete.');
+    if (menuWithoutIng) messages.push('Some menu items have no ingredients assigned.');
+    tipsEl.textContent = messages.join(' ') || '';
+  }
+
 
   // Expose a function on the global object to force a reload of unified catalog
   // data into the Menu Planner.  This is useful when other parts of the
@@ -374,6 +592,10 @@
       menuTableBody.appendChild(tr);
     });
     updateDishSelectOptions();
+
+    // Apply search filter and update tips
+    if (typeof filterMenuTable === 'function') filterMenuTable();
+    if (typeof updateMenuTips === 'function') updateMenuTips();
   }
   function updateDishNamesInIngredients(oldName, newName) {
     ingredientList.forEach(item => { if (item.dish === oldName) item.dish = newName; });
@@ -435,6 +657,10 @@
 
       ingredientsTableBody.appendChild(tr);
     });
+
+    // Apply search filter and update tips
+    if (typeof filterIngredientsTable === 'function') filterIngredientsTable();
+    if (typeof updateIngredientTips === 'function') updateIngredientTips();
   }
   function updateDishSelectOptions() {
     const selects = ingredientsTableBody.querySelectorAll('select');
@@ -669,6 +895,12 @@
     generateShoppingList();
   });
   document.querySelector('#clear-shopping-btn')?.addEventListener('click', clearShoppingList);
+
+  // Attach search and template listeners for Menu Planner
+  if (menuSearchInput) menuSearchInput.addEventListener('input', filterMenuTable);
+  if (ingredientsSearchInput) ingredientsSearchInput.addEventListener('input', filterIngredientsTable);
+  if (tmplSaveBtn) tmplSaveBtn.addEventListener('click', saveTemplate);
+  if (tmplLoadBtn) tmplLoadBtn.addEventListener('click', loadTemplate);
 
   // Init
   (function init(){
@@ -1107,6 +1339,147 @@
       if (window.__save_timer) clearTimeout(window.__save_timer);
       window.__save_timer = setTimeout(()=> { saveRows(); window.__save_timer = null; }, 400);
     });
+
+    // Initialize the other food conversions section
+    initOtherConverter();
+
+    // Initialize custom units section (weight and volume).  Allows users to define
+    // their own units for conversions.  We defer initialization until the
+    // converter tab is loaded to avoid errors on pages without the section.
+    initCustomUnits();
+  }
+
+  /*
+    Other Food Conversions (liquids and misc. units)
+    This section provides a simple converter between common volume and fluid units.
+    Units supported: milliliters (ml), liters (l), cups (cup), tablespoons (tbsp), teaspoons (tsp), fluid ounces (fl oz), pints (pint), quarts (quart), gallons (gallon).
+    The conversion factors are defined relative to milliliters; conversions convert the input amount to milliliters then to the target unit.
+  */
+  const OTHER_UNITS = {
+    ml: 1,
+    l: 1000,
+    cup: 236.588,
+    tbsp: 14.7868,
+    tsp: 4.92892,
+    fl_oz: 29.5735,
+    pint: 473.176,
+    quart: 946.353,
+    gallon: 3785.41
+  };
+  const OTHER_UNIT_NAMES = {
+    ml: 'mL',
+    l: 'Liter',
+    cup: 'Cup',
+    tbsp: 'Tbsp',
+    tsp: 'Tsp',
+    fl_oz: 'Fl Oz',
+    pint: 'Pint',
+    quart: 'Quart',
+    gallon: 'Gallon'
+  };
+  function initOtherConverter() {
+    const amtInput = document.getElementById('otherConvAmount');
+    const fromSelect = document.getElementById('otherConvFrom');
+    const toSelect = document.getElementById('otherConvTo');
+    const resultEl = document.getElementById('otherConvResult');
+    const btn = document.getElementById('otherConvBtn');
+    if (!amtInput || !fromSelect || !toSelect || !resultEl || !btn) return;
+    // Populate unit dropdowns
+    Object.keys(OTHER_UNITS).forEach(key => {
+      const opt1 = document.createElement('option'); opt1.value = key; opt1.textContent = OTHER_UNIT_NAMES[key] || key;
+      const opt2 = document.createElement('option'); opt2.value = key; opt2.textContent = OTHER_UNIT_NAMES[key] || key;
+      fromSelect.appendChild(opt1);
+      toSelect.appendChild(opt2);
+    });
+    fromSelect.value = 'cup';
+    toSelect.value = 'ml';
+    btn.addEventListener('click', () => {
+      const amount = parseFloat(amtInput.value);
+      if (isNaN(amount)) { resultEl.textContent = 'Enter a valid number.'; return; }
+      const from = fromSelect.value;
+      const to = toSelect.value;
+      const ml = amount * OTHER_UNITS[from];
+      const converted = ml / OTHER_UNITS[to];
+      resultEl.textContent = `${amount} ${OTHER_UNIT_NAMES[from]} = ${converted.toFixed(3)} ${OTHER_UNIT_NAMES[to]}`;
+    });
+  }
+
+  /*
+    Custom Units section
+    This section allows the user to define custom weight (grams) or volume (milliliters) units.  Custom units
+    are stored in localStorage under 'mp_customUnits' (same key used by Menu Planner).  The data structure
+    is { weight: { unitName: factor }, volume: { unitName: factor } }, where factor is the multiplier
+    relative to grams (for weight) or milliliters (for volume).  Units appear only in the converter; other
+    parts of the app can choose to integrate these values as needed.
+  */
+  let customUnitsData = { weight: {}, volume: {} };
+  function loadCustomUnitsConverter() {
+    try {
+      const raw = localStorage.getItem('mp_customUnits');
+      customUnitsData = raw ? JSON.parse(raw) : { weight: {}, volume: {} };
+    } catch (err) {
+      customUnitsData = { weight: {}, volume: {} };
+    }
+  }
+  function saveCustomUnitsConverter() {
+    localStorage.setItem('mp_customUnits', JSON.stringify(customUnitsData));
+  }
+  function renderCustomUnitsList() {
+    const listEl = document.getElementById('customUnitsList');
+    if (!listEl) return;
+    listEl.innerHTML = '';
+    // For each type, create sublists
+    ['weight','volume'].forEach(type => {
+      const units = customUnitsData[type];
+      Object.keys(units).forEach(name => {
+        const factor = units[name];
+        const row = document.createElement('div');
+        row.className = 'custom-unit-row';
+        row.style.display = 'flex';
+        row.style.alignItems = 'center';
+        row.style.gap = '8px';
+        row.innerHTML = `<span>${name} (${type === 'weight' ? 'g' : 'ml'} * ${factor})</span>`;
+        const delBtn = document.createElement('button');
+        delBtn.className = 'secondary';
+        delBtn.textContent = 'Delete';
+        delBtn.onclick = () => {
+          delete customUnitsData[type][name];
+          saveCustomUnitsConverter();
+          renderCustomUnitsList();
+        };
+        row.appendChild(delBtn);
+        listEl.appendChild(row);
+      });
+    });
+  }
+  function initCustomUnits() {
+    // Load current custom units
+    loadCustomUnitsConverter();
+    // Render list
+    renderCustomUnitsList();
+    // Attach add event
+    const typeSelect  = document.getElementById('customUnitType');
+    const nameInput   = document.getElementById('customUnitName');
+    const factorInput = document.getElementById('customUnitFactor');
+    const addBtn      = document.getElementById('addCustomUnit');
+    if (addBtn) {
+      addBtn.addEventListener('click', () => {
+        const type = typeSelect?.value || 'weight';
+        const name = (nameInput?.value || '').trim();
+        const factorStr = factorInput?.value || '';
+        const factor = parseFloat(factorStr);
+        if (!name) { alert('Unit name required'); return; }
+        if (isNaN(factor) || factor <= 0) { alert('Factor must be a positive number'); return; }
+        customUnitsData[type][name] = factor;
+        // persist and update lists
+        saveCustomUnitsConverter();
+        // update lists and input fields
+        renderCustomUnitsList();
+        nameInput.value = '';
+        factorInput.value = '';
+        alert('Custom unit added');
+      });
+    }
   }
 
   // Initialize now (DOM is ready because script is at end of body)

@@ -491,32 +491,93 @@ function renderMenuItemsPP(root) {
   function draw() {
     tbody.innerHTML = '';
     menuItems.forEach((mi, idx) => {
+      // Ensure fields exist
+      if (mi.price === undefined) mi.price = null;
+      if (!Array.isArray(mi.components)) mi.components = [];
       const tr = document.createElement('tr');
-      const compsStr = (mi.components || []).map(c => `${c.qty} ${c.unit} ${c.name}`).join(' | ');
       tr.innerHTML = `
         <td><input type="text" data-k="name" value="${mi.name || ''}"></td>
         <td><input type="text" data-k="description" value="${mi.description || ''}"></td>
-        <td><textarea data-k="components">${compsStr}</textarea></td>
+        <td><select multiple data-k="prepItems" style="min-width:140px"></select></td>
+        <td><textarea data-k="other" style="min-width:140px" placeholder="qty unit name | ..."></textarea></td>
+        <td><input type="number" min="0" step="any" data-k="price" value="${mi.price ?? ''}"></td>
         <td><button data-act="del" class="secondary">Delete</button></td>
       `;
-      tr.oninput = (ev) => {
-        const el = ev.target;
-        const k = el.dataset.k;
-        if (!k) return;
-        if (k === 'components') {
-          mi.components = el.value.split('|').map(s => s.trim()).filter(Boolean).map(seg => {
-            const parts = seg.trim().split(/\s+/);
-            const qty = Number(parts.shift());
-            const unit = parts.shift() || '';
-            const name = parts.join(' ');
-            return { qty: qty, unit: unit, name: name };
-          });
-        } else {
-          mi[k] = el.value;
-        }
+      // Cache references
+      const nameInput = tr.querySelector('input[data-k="name"]');
+      const descInput = tr.querySelector('input[data-k="description"]');
+      const priceInput = tr.querySelector('input[data-k="price"]');
+      const prepSelect = tr.querySelector('select[data-k="prepItems"]');
+      const otherArea = tr.querySelector('textarea[data-k="other"]');
+      // Populate prep items select from state.items
+      prepSelect.innerHTML = '';
+      state.items.forEach(pi => {
+        const opt = document.createElement('option');
+        opt.value = pi.id;
+        opt.textContent = pi.name || pi.id;
+        // Mark selected if this prep item exists in components
+        const compIdx = mi.components.findIndex(c => c.prepItemId === pi.id);
+        if (compIdx !== -1) opt.selected = true;
+        prepSelect.appendChild(opt);
+      });
+      // Populate other field based on components without prepItemId
+      const otherComps = mi.components.filter(c => !c.prepItemId);
+      otherArea.value = otherComps.map(c => `${c.qty ?? ''} ${c.unit ?? ''} ${c.name ?? ''}`.trim()).join(' | ');
+      // Event handlers for inputs
+      nameInput.addEventListener('input', () => {
+        mi.name = nameInput.value;
         save();
-        // no immediate redraw; we update UI in place
-      };
+      });
+      descInput.addEventListener('input', () => {
+        mi.description = descInput.value;
+        save();
+      });
+      priceInput.addEventListener('input', () => {
+        mi.price = priceInput.value === '' ? null : Number(priceInput.value);
+        save();
+      });
+      prepSelect.addEventListener('change', () => {
+        const selectedIds = Array.from(prepSelect.selectedOptions).map(opt => opt.value);
+        const newComps = [];
+        selectedIds.forEach(id => {
+          const existing = mi.components.find(c => c.prepItemId === id);
+          if (existing) {
+            newComps.push({ ...existing });
+          } else {
+            const pi = state.items.find(p => p.id === id);
+            newComps.push({ prepItemId: id, qty: 1, unit: pi?.unit || '', name: pi?.name || '' });
+          }
+        });
+        // Keep other comps
+        mi.components.filter(c => !c.prepItemId).forEach(c => newComps.push({ ...c }));
+        mi.components = newComps;
+        save();
+      });
+      otherArea.addEventListener('input', () => {
+        const text = otherArea.value;
+        const parts = text.split(/\n|\|/).map(s => s.trim()).filter(Boolean);
+        const otherCompsList = parts.map(seg => {
+          const tokens = seg.split(/\s+/);
+          let qty = null; let unit = '';
+          if (tokens.length > 0) {
+            const maybeNum = parseFloat(tokens[0]);
+            if (!isNaN(maybeNum)) {
+              qty = maybeNum;
+              tokens.shift();
+              if (tokens.length > 0) {
+                unit = tokens.shift();
+              }
+            }
+          }
+          const name = tokens.join(' ');
+          return { qty: qty, unit: unit, name: name, prepItemId: null };
+        });
+        // Keep prep comps and update other comps
+        const prepComps = mi.components.filter(c => c.prepItemId);
+        mi.components = [...prepComps, ...otherCompsList];
+        save();
+      });
+      // Delete button
       tr.querySelector('button[data-act="del"]').onclick = () => {
         menuItems.splice(idx, 1);
         save();

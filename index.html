@@ -50,6 +50,10 @@
       <section id="menu-section">
         <h3>Menu Items</h3>
         <p>Enter the menu items for your event. Each menu item has a name and optional description.</p>
+        <!-- Search bar for Menu Items -->
+        <div class="search-bar">
+          <input type="text" id="menu-search" placeholder="Search menu items"/>
+        </div>
         <table id="menu-table">
           <thead>
             <tr>
@@ -69,6 +73,10 @@
       <section id="ingredients-section">
         <h3>Ingredients</h3>
         <p>Assign ingredients to each menu item along with the amount needed per menu item and its unit.</p>
+        <!-- Search bar for Ingredients assignment -->
+        <div class="search-bar">
+          <input type="text" id="ingredients-search" placeholder="Search ingredients"/>
+        </div>
         <table id="ingredients-table">
           <thead>
             <tr>
@@ -86,9 +94,24 @@
         <button id="add-ingredient-btn" class="add-btn">Add Ingredient</button>
       </section>
 
-      <!-- Expected Seats Section -->
+      <!-- Event Templates Section -->
+      <section id="templates-section">
+        <h3>Event Templates</h3>
+        <div class="template-controls" style="display:flex; flex-wrap: wrap; gap: 8px; align-items: center;">
+          <input type="text" id="template-name" placeholder="Template name" style="flex:1; min-width:160px; padding:0.3rem"/>
+          <button id="save-template-btn" class="secondary-btn">Save Template</button>
+          <label style="display:flex; align-items:center; gap:4px;">
+            <span>Load Template:</span>
+            <select id="template-select" style="min-width:160px;"></select>
+          </label>
+          <button id="load-template-btn" class="secondary-btn">Load</button>
+        </div>
+        <p class="help">Templates save your menu items, ingredient assignments and guest headcount.</p>
+      </section>
+
+      <!-- Guest Headcount Section -->
       <section id="seats-section">
-        <h3>Expected Seats (Number of Diners)</h3>
+        <h3>Guest Headcount:</h3>
         <input type="number" id="expected-seats" min="1" value="1" />
       </section>
 
@@ -179,8 +202,8 @@
       </section>
 
       <section class="card">
-        <h3 style="margin:0 0 8px 0">Ingredient Manager</h3>
-        <p class="help">Add/edit ingredient densities (grams per US cup). Data saved in your browser.</p>
+        <h3 style="margin:0 0 8px 0">Dry Ingredients by Weight</h3>
+        <p class="help">Add/edit densities (grams per US cup) for dry ingredients. Only ingredients marked as dry will appear here. Data saved in your browser.</p>
 
         <div class="dense-row">
           <input id="newIngName" type="text" placeholder="Ingredient name" class="grow"/>
@@ -196,6 +219,35 @@
         </div>
 
         <div class="saved-count"><strong>Saved ingredients:</strong> <span id="savedCount" class="muted"></span></div>
+      </section>
+      <!-- New section for converting other types of food products (liquids and miscellaneous ingredients) -->
+      <section class="card">
+        <h3 style="margin:0 0 8px 0">Other Food Conversions</h3>
+        <p class="help">Convert between common volume and fluid units (e.g. cups, liters, tablespoons).</p>
+        <div class="dense-row">
+          <input id="otherConvAmount" type="number" placeholder="Amount" class="w-120" />
+          <select id="otherConvFrom"></select>
+          <span>→</span>
+          <select id="otherConvTo"></select>
+          <button id="otherConvBtn" class="secondary">Convert</button>
+        </div>
+        <p id="otherConvResult" class="help" style="margin-top:8px"></p>
+      </section>
+
+      <!-- Custom Units Section -->
+      <section class="card">
+        <h3 style="margin:0 0 8px 0">Custom Units</h3>
+        <p class="help">Define your own weight or volume units for conversions. Enter the unit name and its factor relative to grams or milliliters.</p>
+        <div class="dense-row">
+          <select id="customUnitType">
+            <option value="weight">Weight (g)</option>
+            <option value="volume">Volume (ml)</option>
+          </select>
+          <input id="customUnitName" type="text" placeholder="Unit name" class="grow"/>
+          <input id="customUnitFactor" type="number" min="0" step="any" placeholder="Factor" class="w-140"/>
+          <button id="addCustomUnit" class="secondary">➕ Add Unit</button>
+        </div>
+        <div id="customUnitsList" class="ing-list" style="margin-top:8px;"></div>
       </section>
     </section>
 
@@ -475,7 +527,8 @@
           </div>
           <table class="table">
             <thead>
-              <tr><th>Name</th><th>Description</th><th>Components (qty unit name)</th><th></th></tr>
+              <!-- Updated columns: separate prep items, other/garnish and price -->
+              <tr><th>Name</th><th>Description</th><th>Prep Items</th><th>Other/Garnish</th><th>Price</th><th></th></tr>
             </thead>
             <tbody id="menuitems-rows"></tbody>
           </table>
@@ -617,7 +670,8 @@
       try {
         const out = {};
         data.ingredients.forEach(ing => {
-          if (ing && typeof ing.name === 'string' && ing.density != null) {
+          // Only sync densities for ingredients marked as dry (used by weight)
+          if (ing && typeof ing.name === 'string' && ing.density != null && ing.dry) {
             out[ing.name] = ing.density;
           }
         });
@@ -712,7 +766,7 @@
       // Table
       const table = document.createElement('table');
       table.className = 'table';
-      table.innerHTML = '<thead><tr><th>Name</th><th>g per cup</th><th>Price per Unit</th><th></th></tr></thead>';
+      table.innerHTML = '<thead><tr><th>Name</th><th>g per cup</th><th>Price per Unit</th><th>Dry?</th><th></th></tr></thead>';
       const tbody = document.createElement('tbody');
       data.ingredients.forEach((ing, idx) => {
         const tr = document.createElement('tr');
@@ -720,6 +774,7 @@
           <td><input type="text" data-k="name" value="${ing.name || ''}"></td>
           <td><input type="number" min="0" step="any" data-k="density" value="${ing.density ?? ''}"></td>
           <td><input type="number" min="0" step="any" data-k="price" value="${ing.price ?? ''}"></td>
+          <td><input type="checkbox" data-k="dry" ${ing.dry ? 'checked' : ''}></td>
           <td><button data-act="del" class="secondary">Delete</button></td>
         `;
         tr.oninput = (ev) => {
@@ -729,6 +784,7 @@
           if (k === 'name') ing.name = el.value;
           else if (k === 'density') ing.density = el.value === '' ? null : Number(el.value);
           else if (k === 'price') ing.price = el.value === '' ? null : Number(el.value);
+          else if (k === 'dry') ing.dry = el.checked;
           saveCategory('ingredients');
         };
         tr.querySelector('button[data-act="del"]').onclick = () => {
@@ -1026,34 +1082,95 @@
       container.appendChild(toolbar);
       const table = document.createElement('table');
       table.className = 'table';
-      table.innerHTML = '<thead><tr><th>Name</th><th>Description</th><th>Components</th><th></th></tr></thead>';
+      // Updated header: include Prep Items multi-select, Other/Garnish text, and Price
+      table.innerHTML = '<thead><tr><th>Name</th><th>Description</th><th>Prep Items</th><th>Other/Garnish</th><th>Price</th><th></th></tr></thead>';
       const tbody = document.createElement('tbody');
       data.menuItems.forEach((mi, idx) => {
+        // Ensure new fields exist
+        if (mi.price === undefined) mi.price = null;
+        if (!Array.isArray(mi.components)) mi.components = [];
         const tr = document.createElement('tr');
-        const compsStr = mi.components.map(c => `${c.qty} ${c.unit} ${c.name}`).join(' | ');
         tr.innerHTML = `
           <td><input type="text" data-k="name" value="${mi.name || ''}"></td>
           <td><input type="text" data-k="description" value="${mi.description || ''}"></td>
-          <td><textarea data-k="components">${compsStr}</textarea></td>
+          <td>
+            <select multiple data-k="prepItems" style="min-width:140px"></select>
+          </td>
+          <td><textarea data-k="other" style="min-width:140px" placeholder="qty unit name | ..."></textarea></td>
+          <td><input type="number" min="0" step="any" data-k="price" value="${mi.price ?? ''}"></td>
           <td><button data-act="del" class="secondary">Delete</button></td>
         `;
-        tr.oninput = (ev) => {
-          const el = ev.target;
-          const k = el.dataset.k;
-          if (!k) return;
-          if (k === 'components') {
-            mi.components = el.value.split('|').map(s => s.trim()).filter(Boolean).map(seg => {
-              const parts = seg.split(/\s+/);
-              const qty = Number(parts.shift());
-              const unit = parts.shift() || '';
-              const nm = parts.join(' ');
-              return { qty: qty, unit: unit, name: nm };
-            });
-          } else {
-            mi[k] = el.value;
-          }
+        const nameInput = tr.querySelector('input[data-k="name"]');
+        const descInput = tr.querySelector('input[data-k="description"]');
+        const priceInput = tr.querySelector('input[data-k="price"]');
+        const prepSelect = tr.querySelector('select[data-k="prepItems"]');
+        const otherArea = tr.querySelector('textarea[data-k="other"]');
+        // Populate prep items select
+        prepSelect.innerHTML = '';
+        data.prepItems.forEach(pi => {
+          const opt = document.createElement('option');
+          opt.value = pi.id;
+          opt.textContent = pi.name || pi.id;
+          // select if this prep item is in components (prep)
+          const compIdx = mi.components.findIndex(c => c.prepItemId === pi.id);
+          if (compIdx !== -1) opt.selected = true;
+          prepSelect.appendChild(opt);
+        });
+        // Populate other field with existing other/garnish components
+        const otherComps = mi.components.filter(c => !c.prepItemId);
+        otherArea.value = otherComps.map(c => `${c.qty ?? ''} ${c.unit ?? ''} ${c.name ?? ''}`.trim()).join(' | ');
+        // Event handlers
+        nameInput.addEventListener('input', () => { mi.name = nameInput.value; saveCategory('menuItems'); });
+        descInput.addEventListener('input', () => { mi.description = descInput.value; saveCategory('menuItems'); });
+        priceInput.addEventListener('input', () => {
+          mi.price = priceInput.value === '' ? null : Number(priceInput.value);
           saveCategory('menuItems');
-        };
+        });
+        prepSelect.addEventListener('change', () => {
+          const selectedIds = Array.from(prepSelect.selectedOptions).map(opt => opt.value);
+          // Filter existing prep components by selectedIds or others
+          const newComps = [];
+          // Add selected prep items with default qty/unit or existing values
+          selectedIds.forEach(id => {
+            // find existing comp for this id
+            const existing = mi.components.find(c => c.prepItemId === id);
+            if (existing) {
+              newComps.push({ ...existing });
+            } else {
+              const pi = data.prepItems.find(p => p.id === id);
+              newComps.push({ prepItemId: id, qty: 1, unit: pi?.unit || '', name: pi?.name || '' });
+            }
+          });
+          // include other comps from previous
+          mi.components.filter(c => !c.prepItemId).forEach(c => newComps.push({ ...c }));
+          mi.components = newComps;
+          saveCategory('menuItems');
+        });
+        otherArea.addEventListener('input', () => {
+          // Parse other/garnish text into components (qty unit name) separated by | or newline
+          const text = otherArea.value;
+          const parts = text.split(/\n|\|/).map(s => s.trim()).filter(Boolean);
+          const otherCompsList = parts.map(seg => {
+            const tokens = seg.split(/\s+/);
+            let qty = null; let unit = '';
+            if (tokens.length > 0) {
+              const maybeNum = parseFloat(tokens[0]);
+              if (!isNaN(maybeNum)) {
+                qty = maybeNum;
+                tokens.shift();
+                if (tokens.length > 0) {
+                  unit = tokens.shift();
+                }
+              }
+            }
+            const name = tokens.join(' ');
+            return { qty: qty, unit: unit, name: name, prepItemId: null };
+          });
+          // Keep existing prep comps and update other comps
+          const prepComps = mi.components.filter(c => c.prepItemId);
+          mi.components = [...prepComps, ...otherCompsList];
+          saveCategory('menuItems');
+        });
         tr.querySelector('button[data-act="del"]').onclick = () => {
           data.menuItems.splice(idx, 1);
           saveCategory('menuItems');
