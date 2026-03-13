@@ -1,0 +1,10 @@
+{
+  "title": "Clipboard Chef",
+  "description": "An inventory management, prep and par list toolset, and menu planning / conversion calculator to assist with shopping and event pricing.",
+  "imageUrl": "https://austinight.github.io/menu-planner/preview-carousel.png?v=1",
+  "tags": ["chef-toolkit"],
+  "projectKey": "clipboard-chef",
+  "repoUrl": "https://github.com/AustiNight/menu-planner",
+  "readmeUrl": "https://raw.githubusercontent.com/AustiNight/clipboard-chef/main/README.md",
+  "carouselText": "An inventory management, prep and par list toolset, and menu planning / conversion calculator to assist with shopping and event pricing."
+}
